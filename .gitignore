@@ -1,0 +1,12 @@
+*~
+*.swp
+*.kate-swp
+
+*.o
+*.bin
+*.elf
+*.hex
+*.map
+*.out
+*.d
+*.Td
