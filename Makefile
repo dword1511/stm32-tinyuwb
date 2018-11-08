@@ -2,6 +2,13 @@ PROGRAM    := tinyuwb
 SRCS       := $(wildcard *.c) $(wildcard decadriver/*.c) $(wildcard decartls/*.c) $(wildcard os/*.c)
 CROSS      ?= arm-none-eabi-
 
+# NOTE: TICK_HZ has to be large enough for ranging to be accurate
+CONFIG     ?=   \
+  TICK_HZ=100   \
+  DEEP_SLEEP=1  \
+  ENABLE_LEDS=1 \
+
+
 ###############################################################################
 
 # Clear implicit rules
@@ -29,14 +36,18 @@ OBJS       := $(SRCS:.c=.o)
 # Debugging
 CFLAGS     += -Wall -Wdouble-promotion -g3 -gdwarf-4
 # Optimizations
+# NOTE: without optimization everything will fail... Computational power is marginal.
 CFLAGS     += -O2 -fbranch-target-load-optimize -fipa-pta -frename-registers -fgcse-sm -fgcse-las -funswitch-loops -fsplit-loops -fstdarg-opt
 #CFLAGS     += -O0 # Use this for debugging-friendly binary
+#CFLAGS     += -Og
 # Disabling aggressive loop optimizations since it does not work for loops longer than certain iterations
 CFLAGS     += -fno-aggressive-loop-optimizations
 # Aggressive optimizations
 #CFLAGS     += -funroll-loops -fbranch-target-load-optimize2
 # Includes
 CFLAGS     += -Ilibopencm3/include/ -I$(TOPDIR)
+# Config
+CFLAGS     += $(addprefix -D,$(CONFIG))
 
 # Generate dependency information
 CFLAGS     += -MT $@ -MMD -MP -MF $(DEPDIR)/$*.Td

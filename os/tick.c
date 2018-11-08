@@ -9,13 +9,12 @@
 #include <os/tick.h>
 
 
-#define TICK_HZ           100 /* Has to be large enough for ranging to be accurate */
-
 #define SYSCLK_PERIOD_MS  (1000 / (TICK_HZ))
 #define SYSCLK_PERIOD     ((rcc_ahb_frequency) * (SYSCLK_PERIOD_MS) / 1000 - 1)
 
 
 static volatile uint32_t  uptime_ms = 0;
+static          unsigned  cycle_per_us = 0;
 
 
 void sys_tick_handler(void) {
@@ -30,6 +29,8 @@ void tick_setup(void) {
   systick_set_reload(SYSCLK_PERIOD);
   systick_interrupt_enable();
   systick_counter_enable();
+
+  cycle_per_us = rcc_ahb_frequency / 1000000;
 }
 
 /* NOTE: Warps every 49 days... */
@@ -43,5 +44,16 @@ void tick_sleep(uint32_t ms) {
 
   while (uptime_ms < target) {
     asm("wfi");
+  }
+}
+
+__attribute__((optimize("unroll-loops")))
+void tick_delay_us(uint32_t us) {
+  uint32_t i, j;
+
+  for (i = 0; i < us; i ++) {
+    for (j = 0; j < cycle_per_us; j ++) {
+      asm("nop");
+    }
   }
 }

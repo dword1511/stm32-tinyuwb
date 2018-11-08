@@ -7,8 +7,6 @@
 
 #include <decartls/instance.h>
 
-#include <deca_ctl.h>
-
 // NOTE: the maximum RX timeout is ~ 65ms
 
 #define ADDR16_TO_ANCHOR_N(x) (x & (~0x80))
@@ -169,7 +167,9 @@ static int tag_do_ta_sleep_done(instance_data_t *inst) {
   inst->instanceWakeTime_ms = portGetTickCnt();
 #if (DEEP_SLEEP == 1)
   port_wakeup_dw1000_fast();
+#if ENABLE_LEDS
   dwt_setleds(1);
+#endif
   /* MP bug - TX antenna delay needs reprogramming as it is not preserved (only RX) */
   dwt_settxantennadelay(inst->txAntennaDelay);
   /* set EUI (not preserved) */

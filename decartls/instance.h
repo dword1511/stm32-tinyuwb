@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include <os/tick.h>
+
 #include <decadriver/deca_device_api.h>
 #include <decadriver/deca_types.h>
 
@@ -13,17 +15,6 @@ typedef int64_t int64;
 #define FALSE 0
 #define TRUE  1
 
-/******************************************************************************************************************
-********************* NOTES on TREK compile/build time features/options ***********************************************************
-*******************************************************************************************************************/
-#define DEEP_SLEEP (1) //To enable deep-sleep set this to 1
-//DEEP_SLEEP mode can be used, for example, by a Tag instance to put the DW1000 into low-power deep-sleep mode while it is
-//waiting for start of next ranging exchange
-
-
-/******************************************************************************************************************
-*******************************************************************************************************************
-*******************************************************************************************************************/
 
 #define SPEED_OF_LIGHT    (299702547.0)   // in m/s in air
 #define MASK_40BIT      (0x00FFFFFFFFFF)  // DW1000 counter is 40 bits
@@ -176,8 +167,7 @@ typedef int64_t int64;
 
 #define INVALID_TOF (0xABCDFFFF)
 
-typedef enum inst_states
-{
+typedef enum inst_states {
   TA_INIT, //0
 
   TA_TXE_WAIT,        //1 - state in which the instance will enter sleep (if ranging finished) or proceed to transmit a message
@@ -337,6 +327,10 @@ typedef struct {
 
   event_data_t dw_event_g; /* Was in instance_common.c used by instance_getevent(). */
 } instance_data_t;
+
+
+#define portGetTickCnt() tick_get_uptime()
+extern void port_wakeup_dw1000_fast(void);
 
 
 int instance_init(void);
