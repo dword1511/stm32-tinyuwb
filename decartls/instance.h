@@ -279,17 +279,16 @@ typedef struct {
   INST_STATES previousState;
 
   //configuration structures
-  dwt_config_t    configData;
-  dwt_txconfig_t  configTX;
+  dwt_config_t    configData; /* TODO: should be const */
+  dwt_txconfig_t  configTX; /* TODO: should be const */
   uint16      txAntennaDelay;
-  uint16      rxAntennaDelay;
   uint32      txPower;
   uint8       txPowerChanged;
 
   uint16      instanceAddress16;
 
-  int32       tagPeriod_ms;
-  int32       tagSleepTime_ms;
+  int32       tagPeriod_ms; /* TODO: should be const */
+  int32       tagSleepTime_ms; /* TODO: should be const */
   int32       tagSleepRnd_ms;
 
   uint64      pollTx2FinalTxDelay;
@@ -303,52 +302,41 @@ typedef struct {
   srd_msg_dsss msg_f;
 
   //Tag function address/message configuration
-  uint8   shortAdd_idx ;        // device's 16-bit address low byte (used as index into arrays [0 - 3])
-  uint8   eui64[8];        // device's EUI 64-bit address
-  uint16  psduLength ;      // used for storing the TX frame length
-  uint8   frameSN;        // modulo 256 frame sequence number - it is incremented for each new frame transmission
-  uint16  panID ;          // panid used in the frames
+  uint8       eui64[8];
+  uint16      psduLength;
+  uint8       frameSN;
+  uint16      panID; /* TODO: should be const */
 
   //64 bit timestamps
-  //union of TX timestamps
   union {
-    uint64 txTimeStamp;       // last tx timestamp
-    uint64 tagPollTxTime;       // tag's poll tx timestamp
+    uint64 txTimeStamp;
+    uint64 tagPollTxTime;
   } txu;
-  uint32 tagPollTxTime32h;
+  uint32      tagPollTxTime32h;
 
   //application control parameters
-  uint8  wait4ack;        // if this is set to DWT_RESPONSE_EXPECTED, then the receiver will turn on automatically after TX completion
-  uint8   wait4final;
+  uint8       wait4ack;
 
-  uint8   instToSleep;      // if set the instance will go to sleep before sending the blink/poll message
-  uint8  instanceTimerEn;    // enable/start a timer
-  uint32  instanceWakeTime_ms;  // micro time at which the tag was waken up
-  uint32  nextWakeUpTime_ms;    // micro time at which to wake up tag
+  uint8       instToSleep;
+  uint8       instanceTimerEn;
+  uint32      instanceWakeTime_ms;
+  uint32      nextWakeUpTime_ms;
 
-  /* NOTE: this dude needs expansion if we change MAX_ANCHOR_LIST_SIZE */
-  uint8   rxResponseMask;      // bit mask - bit 0 = received response from anchor ID = 0, bit 1 from anchor ID = 1 etc...
-  uint8  rangeNum;        // incremented for each sequence of ranges (each slot)
+  /* NOTE: this field needs expansion if we change MAX_ANCHOR_LIST_SIZE */
+  uint8       rxResponseMask;
+  uint8       rangeNum;
 
-  int8  rxResps;        // how many responses were received to a poll (in current ranging exchange)
-  int8  remainingRespToRx ;    // how many responses remain to be received (in current ranging exchange)
+  int8        remainingRespToRx;
 
-  uint16  sframePeriod_ms;    // superframe period in ms
-  uint16  slotDuration_ms;    // slot duration in ms
-  int32   tagSleepCorrection_ms;  // tag's sleep correction to keep it in it's assigned slot
+  int32       tagSleepCorrection_ms;
 
   //event queue - used to store DW1000 events as they are processed by the dw_isr/callback functions
   event_data_t dwevent[MAX_EVENT_NUMBER]; //this holds any TX/RX events and associated message data
-  uint8 dweventIdxOut;
-  uint8 dweventIdxIn;
-  uint8 dweventPeek;
-  uint8 monitor;
-  uint32 timeofTx;
-
-  uint8 smartPowerEn;
+  uint8       dweventIdxOut;
+  uint8       dweventIdxIn;
 
   event_data_t dw_event_g; /* Was in instance_common.c used by instance_getevent(). */
-} instance_data_t ;
+} instance_data_t;
 
 
 int instance_init(void);
