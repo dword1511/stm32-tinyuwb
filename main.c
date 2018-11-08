@@ -142,7 +142,7 @@ int main(void) {
 
   hw_reset();
 
-  ret = instance_init(TAG);
+  ret = instance_init();
   if (ret != 0) {
     os_panic();
   }

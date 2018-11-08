@@ -18,11 +18,15 @@ extern uint8 dwnsSFDlen[];
 extern uint8 chan_idx[];
 
 
-static uint64 instance_convert_usec_to_devtimeu (double microsecu) {
-  /* TODO: basically just rounding */
-  return (uint64) ((microsecu / DWT_TIME_UNITS) / 1e6);
+static uint64 instance_convert_usec_to_devtimeu(float microsecu) {
+  /* NOTE: float to uint64_t calls __aeabi_f2ulz(), which then calls __aeabi_dsub()/__aeabi_d2uiz(). */
+  /* To avoid double-precision float points, we need to eliminate this stuff */
+  uint32_t hi, lo;
+  microsecu = (microsecu / DWT_TIME_UNITS) / 1e6f;
+  hi = microsecu / ((1 << 31) * 2.0f);
+  lo = microsecu;
+  return ((uint64_t)hi) << 32 | lo;
 }
-
 
 static float calc_length_data(float msgdatalen) {
   instance_data_t* inst = instance_get_local_structure_ptr(0);
@@ -59,12 +63,10 @@ static void instance_set_replydelay(int delayus) {
   int respframe = 0;
   int respframe_sy = 0;
   int pollframe_sy = 0;
-  int finalframeA_sy = 0;
 
   //configure the rx delay receive delay time, it is dependent on the message length
   float msgdatalen_resp = 0;
   float msgdatalen_poll = 0;
-  float msgdatalen_finalA = 0;
   float preamblelen = 0;
   int sfdlen = 0;
 
@@ -73,9 +75,6 @@ static void instance_set_replydelay(int delayus) {
   //msgdatalen = TAG_FINAL_MSG_LEN + FRAME_CRTL_AND_ADDRESS_S + FRAME_CRC;
   msgdatalen_resp = calc_length_data(ANCH_RESPONSE_MSG_LEN + FRAME_CRTL_AND_ADDRESS_S + FRAME_CRC);
   msgdatalen_poll = calc_length_data(TAG_POLL_MSG_LEN + FRAME_CRTL_AND_ADDRESS_S + FRAME_CRC);
-
-  msgdatalen_finalA = calc_length_data(ANCH_FINAL_MSG_LEN + FRAME_CRTL_AND_ADDRESS_S + FRAME_CRC);
-  //msgdatalen_finalT = calc_length_data(TAG_FINAL_MSG_LEN + FRAME_CRTL_AND_ADDRESS_S + FRAME_CRC);
 
   //SFD length is 64 for 110k (always)
   //SFD length is 8 for 6.81M, and 16 for 850k, but can vary between 8 and 16 bytes
@@ -119,16 +118,10 @@ static void instance_set_replydelay(int delayus) {
   respframe_sy = (DW_RX_ON_DELAY + (int)((preamblelen + ((msgdatalen_resp + margin)/1000.0))/ 1.0256));
   pollframe_sy = (DW_RX_ON_DELAY + (int)((preamblelen + ((msgdatalen_poll + margin)/1000.0))/ 1.0256));
 
-  finalframeA_sy = (DW_RX_ON_DELAY + (int)((preamblelen + ((msgdatalen_finalA + margin)/1000.0))/ 1.0256));
-
   //tag to anchor ranging consists of poll, 4xresponse and final
   //pollTx2FinalTxDelay delay is the time from start of sending of the poll to the start of sending of the final message
   //this is configured by the user with pollTxToFinalTxDly in sfConfig_t
-  inst->pollTx2FinalTxDelay = instance_convert_usec_to_devtimeu (delayus);
-
-  //the anchor to anchor ranging consist of A0 ranging to A1 and A2 and A1 ranging to A2
-  //so there are a maximum of two responses, thus the poll to final delay can be shorter
-  inst->pollTx2FinalTxDelayAnc = instance_convert_usec_to_devtimeu ((delayus >> 1) + RX_RESPONSE_TURNAROUND);
+  inst->pollTx2FinalTxDelay = instance_convert_usec_to_devtimeu(delayus);
 
   //this is the delay the anchors 1, 2, etc.. will send the response back at...
   //anchor 2 will have the delay set to 2 * fixedReplyDelayAnc
@@ -145,15 +138,12 @@ static void instance_set_replydelay(int delayus) {
   inst->tagRespRxDelay_sy = RX_RESPONSE_TURNAROUND + respframe_sy - pollframe_sy;
   inst->fixedReplyDelayAnc32h = ((uint64)instance_convert_usec_to_devtimeu (respframe + RX_RESPONSE_TURNAROUND) >> 8);
   inst->fwto4RespFrame_sy = respframe_sy;
-  inst->fwto4FinalFrame_sy = finalframeA_sy + 200; //add some margin so we don't timeout too soon
 }
 
 
-int instance_init(int inst_mode) {
+int instance_init(void) {
   instance_data_t* inst = instance_get_local_structure_ptr(0);
 
-  inst->mode          = inst_mode;
-  inst->twrMode       = LISTENER;
   inst->testAppState  = TA_INIT;
   inst->instToSleep   = FALSE;
 
@@ -250,7 +240,7 @@ void instance_config(const instanceConfig_t *config, const sfConfig_t *sfConfig)
 
   if ((2 == otprev) || (3 == otprev))  // board is calibrated with TREK1000 with antenna delays set for each use case)
   {
-    uint8 mode = (inst->mode == ANCHOR ? 1 : 0);
+    uint8 mode = 0; /* TAG */
     uint8 chanindex = 0;
     uint32 dly = 0;
 

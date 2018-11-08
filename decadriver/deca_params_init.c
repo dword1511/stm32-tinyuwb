@@ -147,7 +147,7 @@ const uint16 lde_replicaCoeff[PCODES] =
     LDE_REPC_PCODE_24
 };
 
-const double txpwr_compensation[NUM_CH] = {
+const float txpwr_compensation[NUM_CH] = {
     0.0,
     0.035,
     0.0,

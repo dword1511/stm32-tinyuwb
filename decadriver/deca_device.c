@@ -3401,12 +3401,12 @@ uint32 _dwt_computetxpowersetting(uint32 ref_powerreg, int32 power_adj)
 (
        uint8 channel,
        uint32 ref_powerreg,
-       double curr_temp,
-       double ref_temp
+       float curr_temp,
+       float ref_temp
 )
 {
-    double delta_temp;
-    double delta_power;
+    float delta_temp;
+    float delta_power;
 
     // Find the temperature differential
     delta_temp = curr_temp - ref_temp;

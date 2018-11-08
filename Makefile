@@ -27,9 +27,9 @@ DEPDIR     := $(TOPDIR)/.dep
 OBJS       := $(SRCS:.c=.o)
 
 # Debugging
-CFLAGS     += -Wall -g3 -gdwarf-4
+CFLAGS     += -Wall -Wdouble-promotion -g3 -gdwarf-4
 # Optimizations
-CFLAGS     += -O2 -ffast-math -fbranch-target-load-optimize
+CFLAGS     += -O2 -fbranch-target-load-optimize
 # -fipa-pta -frename-registers
 #CFLAGS     += -O0 # Use this for debugging-friendly binary
 # Disabling aggressive loop optimizations since it does not work for loops longer than certain iterations
@@ -47,14 +47,15 @@ POSTCOMPILE = mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d && touch $@
 
 # Architecture-dependent
 LDSCRIPT    = libopencm3/lib/stm32/l0/stm32l0xx6.ld
-ARCH_FLAGS  = -DSTM32L0 -mthumb -mcpu=cortex-m0plus -msoft-float -flto
+ARCH_FLAGS  = -DSTM32L0 -mthumb -mcpu=cortex-m0plus -msoft-float -fsingle-precision-constant -ffast-math -flto --specs=nano.specs
 OPENCM3_MK  = lib/stm32/l0
 LIBOPENCM3  = libopencm3/lib/libopencm3_stm32l0.a
 CFLAGS     += $(ARCH_FLAGS)
 CFLAGS     += -fno-common -ffunction-sections -fdata-sections
 # LDPATH is required for libopencm3's ld scripts to work.
 LDPATH      = libopencm3/lib/
-LDFLAGS    += $(ARCH_FLAGS) -nostdlib -L$(LDPATH) -T$(LDSCRIPT) -Wl,-Map -Wl,$(MAP) -Wl,--gc-sections -Wl,--relax
+# NOTE: the rule will ensure CFLAGS are added during linking
+LDFLAGS    += -nostdlib -L$(LDPATH) -T$(LDSCRIPT) -Wl,-Map -Wl,$(MAP) -Wl,--gc-sections -Wl,--relax
 LDLIBS     += $(LIBOPENCM3) -lc -lm -lgcc
 
 

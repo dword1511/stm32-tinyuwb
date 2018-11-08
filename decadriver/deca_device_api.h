@@ -1510,13 +1510,13 @@ uint32 dwt_calcbandwidthtempadj(uint16 target_count);
  * input parameters:
  * @param channel - uint8 - the channel at which compensation of power level will be applied
  * @param ref_powerreg - uint32 - the TX_POWER register value recorded when reference measurements were made
- * @param current_temperature - double - the current ambient temperature in degrees Celcius
- * @param reference_temperature - double - the temperature at which reference measurements were made
+ * @param current_temperature - float - the current ambient temperature in degrees Celcius
+ * @param reference_temperature - float - the temperature at which reference measurements were made
  * output parameters: None
  *
  * returns: (uint32) The corrected TX_POWER register value
  */
-uint32 dwt_calcpowertempadj(uint8 channel, uint32 ref_powerreg, double current_temperature, double reference_temperature);
+uint32 dwt_calcpowertempadj(uint8 channel, uint32 ref_powerreg, float current_temperature, float reference_temperature);
 
 /*! ------------------------------------------------------------------------------------------------------------------
  * @fn dwt_calcpgcount()

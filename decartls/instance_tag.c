@@ -106,25 +106,20 @@ void rx_ok_cb_tag(const dwt_cb_data_t *rxd) {
   dw_event.typePend = DWT_SIG_DW_IDLE;
 
   if (rxd_event == DWT_SIG_RX_OKAY) {
-
     if (dw_event.msgu.frame[fcode_index] == RTLS_DEMO_MSG_ANCH_RESP) {
-      if(inst->twrMode == INITIATOR) {
-        uint16 sourceAddress = (((uint16)dw_event.msgu.frame[srcAddr_index + 1]) << 8) + dw_event.msgu.frame[srcAddr_index];
-        uint8 index = RRXT0 + 5 * ADDR16_TO_ANCHOR_N(sourceAddress);
+      uint16 sourceAddress = (((uint16)dw_event.msgu.frame[srcAddr_index + 1]) << 8) + dw_event.msgu.frame[srcAddr_index];
+      uint8 index = RRXT0 + 5 * ADDR16_TO_ANCHOR_N(sourceAddress);
 
-        inst->remainingRespToRx--;
-        dw_event.typePend = tag_rx_reenable(sourceAddress, 0);
-        inst->rxResponseMask |= (0x1 << ADDR16_TO_ANCHOR_N(sourceAddress));
-        memcpy(&(inst->msg_f.messageData[index]), rxTimeStamp, 5);
-      }
-    } else {
-      tag_handle_error_unknownframe(dw_event);
+      inst->remainingRespToRx--;
+      dw_event.typePend = tag_rx_reenable(sourceAddress, 0);
+      inst->rxResponseMask |= (0x1 << ADDR16_TO_ANCHOR_N(sourceAddress));
+      memcpy(&(inst->msg_f.messageData[index]), rxTimeStamp, 5);
+      instance_putevent(dw_event, rxd_event);
       return;
     }
-    instance_putevent(dw_event, rxd_event);
-  } else {
-    tag_handle_error_unknownframe(dw_event);
   }
+
+  tag_handle_error_unknownframe(dw_event);
 }
 
 static int tag_do_ta_init(instance_data_t *inst) {
@@ -132,13 +127,12 @@ static int tag_do_ta_init(instance_data_t *inst) {
 
   dwt_enableframefilter(DWT_FF_DATA_EN | DWT_FF_ACK_EN); //allow data, ack frames;
 
-  inst->eui64[0] += inst->instanceAddress16; //so switch 5,6,7 can be used to emulate more tags
+  inst->eui64[0] += inst->instanceAddress16;
   dwt_seteui(inst->eui64);
   dwt_setpanid(inst->panID);
   memcpy(inst->eui64, &inst->instanceAddress16, ADDR_BYTE_SIZE_S);
   dwt_setaddress16(inst->instanceAddress16);
 
-  //Start off by Sleeping 1st -> set instToSleep to TRUE
   inst->nextState = TA_TXPOLL_WAIT_SEND;
   inst->testAppState = TA_TXE_WAIT;
   inst->instToSleep = TRUE ;
@@ -176,11 +170,10 @@ static int tag_do_ta_sleep_done(instance_data_t *inst) {
 #if (DEEP_SLEEP == 1)
   port_wakeup_dw1000_fast();
   dwt_setleds(1);
-  //MP bug - TX antenna delay needs reprogramming as it is not preserved (only RX)
-  dwt_settxantennadelay(inst->txAntennaDelay) ;
-  //set EUI as it will not be preserved unless the EUI is programmed and loaded from NVM
+  /* MP bug - TX antenna delay needs reprogramming as it is not preserved (only RX) */
+  dwt_settxantennadelay(inst->txAntennaDelay);
+  /* set EUI (not preserved) */
   dwt_seteui(inst->eui64);
-  }
 #endif
 
   instance_set_txpower();
@@ -229,15 +222,36 @@ static int tag_do_ta_txpoll_wait_send(instance_data_t *inst) {
   inst->wait4ack = DWT_RESPONSE_EXPECTED;
 
   dwt_writetxfctrl(inst->psduLength, 0, 1);
-
-  inst->twrMode = INITIATOR;
-
   dwt_starttx(DWT_START_TX_IMMEDIATE | DWT_RESPONSE_EXPECTED);
 
   inst->testAppState  = TA_TX_WAIT_CONF;
   inst->previousState = TA_TXPOLL_WAIT_SEND;
 
   return INST_DONE_WAIT_FOR_NEXT_EVENT;
+}
+
+static int tag_do_ta_txfinal_wait_send(instance_data_t *inst) {
+  inst->msg_f.messageData[POLL_RNUM] = inst->rangeNum;
+  inst->msg_f.messageData[VRESP] = inst->rxResponseMask;
+  inst->msg_f.messageData[FCODE] = RTLS_DEMO_MSG_TAG_FINAL;
+  inst->psduLength = (TAG_FINAL_MSG_LEN + FRAME_CRTL_AND_ADDRESS_S + FRAME_CRC);
+  inst->msg_f.seqNum = inst->frameSN ++;
+  dwt_writetxdata(inst->psduLength, (uint8 *) &inst->msg_f, 0);
+
+  inst->wait4ack = 0;
+
+  if (instance_send_delayed_frame(inst, DWT_START_TX_DELAYED)) {
+    /* go to TA_TXE_WAIT first to check if it's sleep time */
+    inst->testAppState = TA_TXE_WAIT;
+    inst->nextState = TA_TXPOLL_WAIT_SEND;
+    inst->instToSleep = TRUE;
+    return INST_NOT_DONE_YET;
+  } else {
+    inst->testAppState = TA_TX_WAIT_CONF;
+    inst->previousState = TA_TXFINAL_WAIT_SEND;
+    inst->instToSleep = TRUE ;
+    return INST_DONE_WAIT_FOR_NEXT_EVENT;
+  }
 }
 
 static int tag_app_run(instance_data_t *inst) {
@@ -265,40 +279,12 @@ static int tag_app_run(instance_data_t *inst) {
       break;
     }
 
-    case TA_TXFINAL_WAIT_SEND:
-            {
-              //the final has the same range number as the poll (part of the same ranging exchange)
-                inst->msg_f.messageData[POLL_RNUM] = inst->rangeNum;
-                //the mask is sent so the anchors know whether the response RX time is valid
-        inst->msg_f.messageData[VRESP] = inst->rxResponseMask;
-              inst->msg_f.messageData[FCODE] = RTLS_DEMO_MSG_TAG_FINAL; //message function code (specifies if message is a poll, response or other...)
-                inst->psduLength = (TAG_FINAL_MSG_LEN + FRAME_CRTL_AND_ADDRESS_S + FRAME_CRC);
-                inst->msg_f.seqNum = inst->frameSN++;
-        dwt_writetxdata(inst->psduLength, (uint8 *)  &inst->msg_f, 0) ;  // write the frame data
+    case TA_TXFINAL_WAIT_SEND: {
+      instDone = tag_do_ta_txfinal_wait_send(inst);
+      break;
+    }
 
-        inst->wait4ack = 0; //clear the flag not using wait for response as this message ends the ranging exchange
-
-        if(instance_send_delayed_frame(inst, DWT_START_TX_DELAYED))
-                {
-                    // initiate the re-transmission
-          inst->testAppState = TA_TXE_WAIT ; //go to TA_TXE_WAIT first to check if it's sleep time
-          inst->nextState = TA_TXPOLL_WAIT_SEND ;
-          inst->instToSleep = TRUE ;
-                    break; //exit this switch case...
-                }
-                else
-                {
-                    inst->testAppState = TA_TX_WAIT_CONF;   // wait confirmation
-                }
-
-        inst->previousState = TA_TXFINAL_WAIT_SEND;
-        inst->instToSleep = TRUE ;
-              instDone = INST_DONE_WAIT_FOR_NEXT_EVENT; //will use RX FWTO to time out (set above)
-            }
-            break;
-
-        case TA_TX_WAIT_CONF :
-            {
+    case TA_TX_WAIT_CONF: {
         event_data_t* dw_event = instance_getevent(11); //get and clear this event
 
                 if(dw_event->type != DWT_SIG_TX_DONE) //wait for TX done confirmation

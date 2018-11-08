@@ -170,12 +170,6 @@ typedef int64_t int64;
 //Thus the ranging exchange will take either 28 ms for 110 kbps and 5 ms for 6.81 Mbps.
 //NOTE: the above times are for 110k rate with 64 symb non-standard SFD and 1024 preamble length
 
-
-
-typedef enum instanceModes{TAG, ANCHOR, ANCHOR_RNG, NUM_MODES} INST_MODE;
-typedef enum instanceTWRModes{INITIATOR, RESPONDER_A, RESPONDER_B, RESPONDER_T, LISTENER, GREETER, ATWR_MODES} ATWR_MODE;
-
-
 #define TOF_REPORT_NUL 0
 #define TOF_REPORT_T2A 1
 #define TOF_REPORT_A2A 2
@@ -279,42 +273,34 @@ typedef struct {
   uint32 txPwr[2];
 } tx_struct;
 
-typedef struct
-{
-  INST_MODE mode;        //instance mode (tag or anchor)
-  ATWR_MODE twrMode;
-  INST_STATES testAppState ;      //state machine - current state
-  INST_STATES nextState ;        //state machine - next state
-  INST_STATES previousState ;      //state machine - previous state
+typedef struct {
+  INST_STATES testAppState;
+  INST_STATES nextState;
+  INST_STATES previousState;
 
   //configuration structures
-  dwt_config_t  configData ;  //DW1000 channel configuration
-  dwt_txconfig_t  configTX ;    //DW1000 TX power configuration
-  uint16      txAntennaDelay ; //DW1000 TX antenna delay
-  uint16      rxAntennaDelay ; //DW1000 RX antenna delay
-  uint32       txPower ;     //DW1000 TX power
-  uint8 txPowerChanged ;      //power has been changed - update the register on next TWR exchange
+  dwt_config_t    configData;
+  dwt_txconfig_t  configTX;
+  uint16      txAntennaDelay;
+  uint16      rxAntennaDelay;
+  uint32      txPower;
+  uint8       txPowerChanged;
 
-  uint16 instanceAddress16; //contains tag/anchor 16 bit address
+  uint16      instanceAddress16;
 
-  //timeouts and delays
-  int32 tagPeriod_ms; // in ms, tag ranging + sleeping period
-  int32 tagSleepTime_ms; //in milliseconds - defines the nominal Tag sleep time period
-  int32 tagSleepRnd_ms; //add an extra slot duration to sleep time to avoid collision before getting synced by anchor 0
+  int32       tagPeriod_ms;
+  int32       tagSleepTime_ms;
+  int32       tagSleepRnd_ms;
 
-  //this is the delay used for the delayed transmit
-  uint64 pollTx2FinalTxDelay ; //this is delay from Poll Tx time to Final Tx time in DW1000 units (40-bit)
-  uint64 pollTx2FinalTxDelayAnc ; //this is delay from Poll Tx time to Final Tx time in DW1000 units (40-bit) for Anchor to Anchor ranging
-  uint32 fixedReplyDelayAnc32h ; //this is a delay used for calculating delayed TX/delayed RX on time (units: 32bit of 40bit DW time)
-  uint32 preambleDuration32h ; //preamble duration in device time (32 MSBs of the 40 bit time)
-  uint32 tagRespRxDelay_sy ; //TX to RX delay time when tag is awaiting response message an another anchor
+  uint64      pollTx2FinalTxDelay;
+  uint32      fixedReplyDelayAnc32h;
+  uint32      preambleDuration32h;
+  uint32      tagRespRxDelay_sy;
 
-  int fwto4RespFrame_sy ; //this is a frame wait timeout used when awaiting reception of Response frames (used by both tag/anchor)
-  int fwto4FinalFrame_sy ; //this is a frame wait timeout used when awaiting reception of Final frames
-  uint32 delayedTRXTime32h;    // time at which to do delayed TX or delayed RX (note TX time is time of SFD, RX time is RX on time)
+  int32       fwto4RespFrame_sy;
+  uint32      delayedTRXTime32h;
 
-  //message structure used for holding the data of the frame to transmit before it is written to the DW1000
-  srd_msg_dsss msg_f ; // ranging message frame with 16-bit addresses
+  srd_msg_dsss msg_f;
 
   //Tag function address/message configuration
   uint8   shortAdd_idx ;        // device's 16-bit address low byte (used as index into arrays [0 - 3])
@@ -364,26 +350,16 @@ typedef struct
   event_data_t dw_event_g; /* Was in instance_common.c used by instance_getevent(). */
 } instance_data_t ;
 
-//-------------------------------------------------------------------------------------------------------------
-//
-//  Functions used in driving/controlling the ranging application
-//
-//-------------------------------------------------------------------------------------------------------------
 
-// Call init, then call config, then call run.
-// initialise the instance (application) structures and DW1000 device
-int instance_init(int role);
-// configure the instance and DW1000 device
-void instance_config(const instanceConfig_t *config, const sfConfig_t *sfconfig) ;
+int instance_init(void);
+void instance_config(const instanceConfig_t *config, const sfConfig_t *sfconfig);
+int tag_run(void);
 
 // configure the MAC address
 void instance_set_16bit_address(uint16 address) ;
 void instance_config_frameheader_16bit(instance_data_t *inst);
 
-// called (periodically or from and interrupt) to process any outstanding TX/RX events and to drive the ranging application
-int tag_run(void) ;
-
-// configure TX/RX callback functions that are called from DW1000 ISR
+// TX/RX callback functions called from DW1000 ISR
 void rx_ok_cb_tag(const dwt_cb_data_t *cb_data);
 void rx_err_cb_tag(const dwt_cb_data_t *cb_data);
 void tx_conf_cb(const dwt_cb_data_t *cb_data);
