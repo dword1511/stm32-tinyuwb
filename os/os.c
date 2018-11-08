@@ -25,29 +25,25 @@ void os_init(void) {
   gpio_mode_setup(GPIOC, GPIO_MODE_ANALOG, GPIO_PUPD_NONE, GPIO_ALL);
   rcc_periph_clock_disable(RCC_GPIOC);
 
-  /* To run SPI1 @ 16MHz we can only run at maximum speed */
-  rcc_osc_on(RCC_HSI16);
+  /* MCU is on HSI after reset */
+  RCC_ICSCR = (RCC_ICSCR & (~(RCC_ICSCR_MSIRANGE_MASK << RCC_ICSCR_MSIRANGE_SHIFT))) | (RCC_ICSCR_MSIRANGE_4MHZ << RCC_ICSCR_MSIRANGE_SHIFT);
 
   rcc_periph_clock_enable(RCC_PWR);
-  pwr_set_vos_scale(PWR_SCALE2);
+  pwr_set_vos_scale(PWR_SCALE3);
   pwr_voltage_regulator_low_power_in_stop();
   PWR_CR |= PWR_CR_LPSDSR;
-  //PWR_CR |= PWR_CR_LPRUN; /* NOTE: this does not work... */
+  //PWR_CR |= PWR_CR_LPRUN; /* NOTE: LPRUN is for kHz only */
   flash_prefetch_enable();
-  flash_set_ws(FLASH_ACR_LATENCY_1WS); /* 1WS in range 2, 0WS in range 1 */
+  flash_set_ws(FLASH_ACR_LATENCY_0WS);
   rcc_periph_clock_disable(RCC_PWR);
 
-  rcc_wait_for_osc_ready(RCC_HSI16);
-  rcc_set_sysclk_source(RCC_HSI16);
-  rcc_osc_off(RCC_MSI);
-
-  rcc_set_hpre(RCC_CFGR_HPRE_NODIV);
-  rcc_set_ppre1(RCC_CFGR_PPRE1_NODIV);
+  rcc_set_hpre(RCC_CFGR_HPRE_NODIV); /* Actually very marginal, cannot afford to be any slower */
+  rcc_set_ppre1(RCC_CFGR_PPRE1_NODIV); /* We are not using anything on it, the bridge should be off */
   rcc_set_ppre2(RCC_CFGR_PPRE2_NODIV);
 
-  rcc_ahb_frequency   = 16000000;
-  rcc_apb1_frequency  = 16000000;
-  rcc_apb2_frequency  = 16000000;
+  rcc_ahb_frequency   = 4194000;
+  rcc_apb1_frequency  = 4194000;
+  rcc_apb2_frequency  = 4194000;
 
   tick_setup();
 }

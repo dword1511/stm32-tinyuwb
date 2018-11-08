@@ -16,7 +16,6 @@
 #define DECA_NODE_MODE  0 /* Lower power than mode 1 according to datasheet */
 #define DECA_NODE_ADDR  0x00
 
-/* TODO: see whether we can squeeze in STM32L011F4 (16K/2K) */
 
 const instanceConfig_t iconfig = {
 #if DECA_NODE_MODE == 0
@@ -101,17 +100,9 @@ static void multispi_setup(void) {
   gpio_set_output_options(GPIOA, GPIO_OTYPE_PP, GPIO_OSPEED_25MHZ, GPIO5 | GPIO6 | GPIO7);
   gpio_mode_setup(GPIOA, GPIO_MODE_AF, GPIO_PUPD_NONE, GPIO5 | GPIO6 | GPIO7);
 
-  /* SPI1 on APB2 (16 MHz), DW1000 mode 0, 2 MHz (< 3 MHz before PLL lock, < 20 MHz after PLL lock) */
-  multispi_config_spi(SPI1, SPI_CR1_BAUDRATE_FPCLK_DIV_8);
-}
-
-static void multispi_speedup(void) {
-  rcc_periph_reset_pulse(RST_SPI1);
-
-  /* SPI1 on APB2 (16 MHz), DW1000 mode 0, 8 MHz (< 3 MHz before PLL lock, < 20 MHz after PLL lock) */
+  /* SPI1 on APB2 (4.2 MHz), DW1000 mode 0, 2.1 MHz (< 3 MHz before PLL lock, < 20 MHz after PLL lock) */
   multispi_config_spi(SPI1, SPI_CR1_BAUDRATE_FPCLK_DIV_2);
 }
-
 
 static void wait_pgood(void) {
 
@@ -148,8 +139,6 @@ int main(void) {
   }
   instance_set_16bit_address(DECA_NODE_ADDR);
   instance_config(&iconfig, &sconfig);
-
-  multispi_speedup();
 
   decamutexoff(s);
 

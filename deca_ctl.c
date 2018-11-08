@@ -111,6 +111,15 @@ void deca_sleep(unsigned int time_ms) {
   tick_sleep(time_ms);
 }
 
+void port_wakeup_dw1000_fast(void) {
+  decaIrqStatus_t s = decamutexon();
+  gpio_clear(GPIOA, GPIO4);
+  tick_sleep(1);
+  gpio_set(GPIOA, GPIO4);
+  tick_sleep(1);
+  decamutexoff(s);
+}
+
 instance_data_t* instance_get_local_structure_ptr(__attribute__((unused)) unsigned int x) {
   return &instance;
 }

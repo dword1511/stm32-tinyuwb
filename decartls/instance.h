@@ -16,7 +16,7 @@ typedef int64_t int64;
 /******************************************************************************************************************
 ********************* NOTES on TREK compile/build time features/options ***********************************************************
 *******************************************************************************************************************/
-#define DEEP_SLEEP (0) //To enable deep-sleep set this to 1
+#define DEEP_SLEEP (1) //To enable deep-sleep set this to 1
 //DEEP_SLEEP mode can be used, for example, by a Tag instance to put the DW1000 into low-power deep-sleep mode while it is
 //waiting for start of next ranging exchange
 

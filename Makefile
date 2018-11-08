@@ -29,13 +29,12 @@ OBJS       := $(SRCS:.c=.o)
 # Debugging
 CFLAGS     += -Wall -Wdouble-promotion -g3 -gdwarf-4
 # Optimizations
-CFLAGS     += -O2 -fbranch-target-load-optimize
-# -fipa-pta -frename-registers
+CFLAGS     += -O2 -fbranch-target-load-optimize -fipa-pta -frename-registers -fgcse-sm -fgcse-las -funswitch-loops -fsplit-loops -fstdarg-opt
 #CFLAGS     += -O0 # Use this for debugging-friendly binary
 # Disabling aggressive loop optimizations since it does not work for loops longer than certain iterations
 CFLAGS     += -fno-aggressive-loop-optimizations
 # Aggressive optimizations
-#CFLAGS     += -fgcse-sm -fgcse-las -funroll-loops -funswitch-loops -fsplit-loops -fbranch-target-load-optimize2 -fstdarg-opt
+#CFLAGS     += -funroll-loops -fbranch-target-load-optimize2
 # Includes
 CFLAGS     += -Ilibopencm3/include/ -I$(TOPDIR)
 
