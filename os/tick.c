@@ -9,7 +9,7 @@
 #include <os/tick.h>
 
 
-#define TICK_HZ           1000 /* Use 1000 to keep it simple and the same as reference code. */
+#define TICK_HZ           100 /* Has to be large enough for ranging to be accurate */
 
 #define SYSCLK_PERIOD_MS  (1000 / (TICK_HZ))
 #define SYSCLK_PERIOD     ((rcc_ahb_frequency) * (SYSCLK_PERIOD_MS) / 1000 - 1)

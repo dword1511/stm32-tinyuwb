@@ -20,167 +20,27 @@ extern const tx_struct txSpectrumConfig[8];
 /* @fn 	  instance_convert_usec_to_devtimeu
  * @brief function to convert microseconds to device time
  * */
-uint64 instance_convert_usec_to_devtimeu (double microsecu)
+static uint64 instance_convert_usec_to_devtimeu (double microsecu)
 {
   uint64 dt;
   long double dtime;
 
-  //LOG("Converting %u us (called by 0x%08x)", (unsigned)microsecu, __builtin_return_address(0));
   dtime = (microsecu / (double) DWT_TIME_UNITS) / 1e6 ;
-  //LOG("DTU %08x00", (unsigned)(dtime / 256));
-
   dt =  (uint64) (dtime) ;
 
   return dt;
 }
 
-/* @fn 	  instance_calculate_rangefromTOF
- * @brief function to calculate and the range from given Time of Flight
- * */
-int instance_calculate_rangefromTOF(int idx, uint32 tofx)
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  double distance ;
-  double distance_to_correct;
-  double tof ;
-  int32 tofi ;
-
-  // check for negative results and accept them making them proper negative integers
-  tofi = (int32) tofx ; // make it signed
-  if (tofi > 0x7FFFFFFF)  // close up TOF may be negative
-  {
-    tofi -= 0x80000000 ;  //
-  }
-
-  // convert device time units to seconds (as floating point)
-  tof = tofi * DWT_TIME_UNITS ;
-  inst->inst_idistraw[idx] = distance = tof * SPEED_OF_LIGHT;
-
-#if (CORRECT_RANGE_BIAS == 1)
-  //for the 6.81Mb data rate we assume gating gain of 6dB is used,
-  //thus a different range bias needs to be applied
-  //if(inst->configData.dataRate == DWT_BR_6M8)
-  if(inst->smartPowerEn)
-  {
-    //1.31 for channel 2 and 1.51 for channel 5
-    if(inst->configData.chan == 5)
-    {
-      distance_to_correct = distance/1.51;
-    }
-    else //channel 2
-    {
-      distance_to_correct = distance/1.31;
-    }
-  }
-  else
-  {
-    distance_to_correct = distance;
-  }
-
-  distance = distance - dwt_getrangebias(inst->configData.chan, (float) distance_to_correct, inst->configData.prf);
-#endif
-
-  if ((distance < 0) || (distance > 20000.000))  // discard any results less than <0 cm or >20 km
-    return 0;
-
-  inst->inst_idist[idx] = distance;
-
-  inst->longTermRangeCount++ ;              // for computing a long term average
-
-  return 1;
-}// end of calculateRangeFromTOF
-
-void instance_set_tagdist(int tidx, int aidx)
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  inst->inst_tdist[tidx] = inst->inst_idist[aidx];
-}
-
-double instance_get_tagdist(int idx)
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  return inst->inst_tdist[idx];
-}
-
-void instance_cleardisttable(int idx)
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  inst->inst_idistraw[idx] = 0;
-  inst->inst_idist[idx] = 0;
-}
-
-void instance_cleardisttableall(void)
-{
-  int i;
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-
-  for(i=0; i<MAX_ANCHOR_LIST_SIZE; i++)
-  {
-    inst->inst_idistraw[i] = 0xffff;
-    inst->inst_idist[i] = 0xffff;
-  }
-}
-
-// -------------------------------------------------------------------------------------------------------------------
-// Set this instance role as the Tag, Anchor
-/*void instance_set_role(int inst_mode)
-{
-		instance_data_t* inst = instance_get_local_structure_ptr(0);
-  // assume instance 0, for this
-  inst->mode =  inst_mode;           // set the role
-}
-*/
-int instance_get_role(void)
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-
-  return inst->mode;
-}
-
-int instance_newrange(void)
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  int x = inst->newRange;
-  inst->newRange = TOF_REPORT_NUL;
-  return x;
-}
-
-int instance_newrangeancadd(void)
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  return inst->newRangeAncAddress;
-}
-
-int instance_newrangetagadd(void)
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  return inst->newRangeTagAddress;
-}
-
-int instance_newrangetim(void)
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  return inst->newRangeTime;
-}
-
 // -------------------------------------------------------------------------------------------------------------------
 // function to clear counts/averages/range values
 //
-void instance_clearcounts(void)
+static void instance_clearcounts(void)
 {
   instance_data_t* inst = instance_get_local_structure_ptr(0);
-  int i= 0 ;
-
-  //inst->rxTimeouts = 0 ;
-  //inst->txMsgCount = 0 ;
-  //inst->rxMsgCount = 0 ;
-
-  dwt_configeventcounters(1); //enable and clear - NOTE: the counters are not preserved when in DEEP SLEEP
+  int i = 0 ;
 
   inst->frameSN = 0;
-
   inst->longTermRangeCount  = 0;
-
 
   for(i=0; i<MAX_ANCHOR_LIST_SIZE; i++)
   {
@@ -191,8 +51,7 @@ void instance_clearcounts(void)
   {
     inst->tof[i] = INVALID_TOF;
   }
-
-} // end instanceclearcounts()
+}
 
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -208,21 +67,15 @@ int instance_init(int inst_mode) {
   inst->testAppState  = TA_INIT;
   inst->instToSleep   = FALSE;
 
-  // Reset the IC (might be needed if not getting here from POWER ON)
-  // ARM code: Remove soft reset here as using hard reset in the inittestapplication() in the main.c file
-  //dwt_softreset();
-
   // this initialises DW1000 and uses specified configurations from OTP/ROM
   result = dwt_initialise(DWT_LOADUCODE);
-  //result = dwt_initialise(DWT_LOADNONE);
 
   if (DWT_SUCCESS != result) {
     return (-1) ;   // device initialise has failed
   }
 
-  // this is platform dependent - only program if DW EVK/EVB
-  /* Should cause DW1000 to blink LEDs during power-on */
-  dwt_setleds(3) ; //configure the GPIOs which control the leds on EVBs
+  /* Enable TXLED and RXLED. NOTE: DW1000 will blink LEDs once during power-on */
+  dwt_setleds(3);
 
   instance_clearcounts() ;
 
@@ -231,13 +84,8 @@ int instance_init(int inst_mode) {
 
   instance_clearevents();
 
-#if (DISCOVERY == 1)
-  dwt_geteui(inst->eui64);
-  inst->panID = 0xdada ;
-#else
   memset(inst->eui64, 0, ADDR_BYTE_SIZE_L);
   inst->panID = 0xdeca ;
-#endif
   inst->tagSleepCorrection_ms = 0;
 
   dwt_setdblrxbuffmode(0); //disable double RX buffer
@@ -254,21 +102,13 @@ int instance_init(int inst_mode) {
   }
 
   inst->monitor = 0;
-
-  //inst->lateTX = 0;
-  //inst->lateRX = 0;
-
   inst->remainingRespToRx = -1; //initialise
-
   inst->rxResps = 0;
 
   dwt_setlnapamode(1, 1); //enable TX, RX state on GPIOs 6 and 5
 
   inst->delayedTRXTime32h = 0;
 
-#if (READ_EVENT_COUNTERS == 1)
-  dwt_configeventcounters(1);
-#endif
   return 0 ;
 }
 
@@ -296,7 +136,7 @@ extern uint8 chan_idx[];
 //
 // function to allow application configuration be passed into instance and affect underlying device operation
 //
-void instance_config(instanceConfig_t *config, sfConfig_t *sfConfig)
+void instance_config(const instanceConfig_t *config, const sfConfig_t *sfConfig)
 {
   instance_data_t* inst = instance_get_local_structure_ptr(0);
   uint32 power = 0;
@@ -376,8 +216,7 @@ void instance_config(instanceConfig_t *config, sfConfig_t *sfConfig)
     //port_set_dw1000_fastrate(); //increase SPI to max
 
     // if nothing was actually programmed then set a reasonable value anyway
-    if ((dly == 0)
-        || (dly == 0xffffffff))
+    if ((dly == 0) || (dly == 0xffffffff))
     {
       if(inst->configData.chan == 5)
       {
@@ -392,7 +231,7 @@ void instance_config(instanceConfig_t *config, sfConfig_t *sfConfig)
     }
 
   }
-  else // assume it is older EVK1000 programming. /* NOTE: this is our case... the module seems uncalibrated */
+  else // assume it is older EVK1000 programming.
   {
     uint32 antennaDly;
     //port_set_dw1000_slowrate(); //reduce SPI to < 3MHz
@@ -441,82 +280,8 @@ void instance_config(instanceConfig_t *config, sfConfig_t *sfConfig)
 
   //set the default response delays
   instance_set_replydelay(sfConfig->pollTxToFinalTxDly_us);
-
 }
 
-int instance_get_rnum(void) //get ranging number
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  return inst->rangeNum;
-}
-
-int instance_get_rnuma(int idx) //get ranging number
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  return inst->rangeNumA[idx];
-}
-
-int instance_get_rnumanc(int idx) //get ranging number
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  return inst->rangeNumAAnc[idx];
-}
-
-int instance_get_lcount(void) //get count of ranges used for calculation of lt avg
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  int x = inst->longTermRangeCount;
-
-  return (x);
-}
-
-double instance_get_idist(int idx) //get instantaneous range
-{
-  double x ;
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-
-  idx &= (MAX_ANCHOR_LIST_SIZE - 1);
-
-  x = inst->inst_idist[idx];
-
-  return (x);
-}
-
-double instance_get_idistraw(int idx) //get instantaneous range (uncorrected)
-{
-  double x ;
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-
-  idx &= (MAX_ANCHOR_LIST_SIZE - 1);
-
-  x = inst->inst_idistraw[idx];
-
-  return (x);
-}
-
-int instance_get_idist_mm(int idx) //get instantaneous range
-{
-  int x ;
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-
-  idx &= (MAX_ANCHOR_LIST_SIZE - 1);
-
-  x = (int)(inst->inst_idist[idx]*1000);
-
-  return (x);
-}
-
-int instance_get_idistraw_mm(int idx) //get instantaneous range (uncorrected)
-{
-  int x ;
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-
-  idx &= (MAX_ANCHOR_LIST_SIZE - 1);
-
-  x = (int)(inst->inst_idistraw[idx]*1000);
-
-  return (x);
-}
 
 /* @fn 	  instanceSet16BitAddress
  * @brief set the 16-bit MAC address
@@ -589,12 +354,6 @@ void tx_conf_cb(const dwt_cb_data_t *txd)
   {
     inst->twrMode = LISTENER ;
   }
-#if (DISCOVERY == 1)
-  else if (inst->twrMode == GREETER)
-  {
-    //don't report TX event ...
-  }
-#endif
   else
   {
     //uint64 txtimestamp = 0;
@@ -733,48 +492,6 @@ void instance_set_txpower(void)
   }
 }
 
-void instance_config_antennadelays(uint16 tx, uint16 rx)
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  inst->txAntennaDelay = tx ;
-  inst->rxAntennaDelay = rx ;
-
-  inst->antennaDelayChanged = 1;
-}
-
-void instance_set_antennadelays(void)
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  if(inst->antennaDelayChanged == 1)
-  {
-    dwt_setrxantennadelay(inst->rxAntennaDelay);
-    dwt_settxantennadelay(inst->txAntennaDelay);
-
-    inst->antennaDelayChanged = 0;
-  }
-}
-
-
-uint16 instance_get_txantdly(void)
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  return inst->txAntennaDelay;
-}
-
-uint16 instance_get_rxantdly(void)
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  return inst->rxAntennaDelay;
-}
-
-uint8 instance_validranges(void)
-{
-  instance_data_t* inst = instance_get_local_structure_ptr(0);
-  uint8 x = inst->rxResponseMaskReport;
-  inst->rxResponseMaskReport = 0; //reset mask as we have printed out the ToFs
-  return x;
-}
-
 
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -813,8 +530,9 @@ float calc_length_data(float msgdatalen)
     msgdatalen += 21539; // PHR length in nanoseconds
   }
 
-  return msgdatalen ;
+  return msgdatalen;
 }
+
 void instance_set_replydelay(int delayus) //delay in us
 {
 //	instance_data_t *inst = &instance_data[0];
@@ -934,40 +652,4 @@ void instance_set_replydelay(int delayus) //delay in us
   //RX Poll (from A0), the Final will come
   inst->anc1RespTx2FinalRxDelay_sy = ((delayus >> 1) + RX_RESPONSE_TURNAROUND) - (respframe_sy+RX_RESPONSE_TURNAROUND) - DW_RX_ON_DELAY - respframe;
   inst->anc2RespTx2FinalRxDelay_sy = (delayus >> 1) + RX_RESPONSE_TURNAROUND - 2*(respframe_sy+RX_RESPONSE_TURNAROUND) - DW_RX_ON_DELAY - respframe;
-
-}
-
-/* @fn 	  instance_calc_ranges
- * @brief calculate range for each ToF in the array, and return a mask of valid ranges
- * */
-int instance_calc_ranges(uint32 *array, uint16 size, int reportRange, uint8* mask)
-{
-  int i;
-  int newRange = TOF_REPORT_NUL;
-  int distance = 0;
-
-  for(i=0; i<size; i++)
-  {
-    uint32 tofx = array[i];
-    if(tofx != INVALID_TOF) //if ToF == 0 - then no new range to report
-    {
-      distance = instance_calculate_rangefromTOF(i, tofx);
-    }
-
-    if(distance == 1)
-    {
-      newRange = reportRange;
-    }
-    else
-    {
-      //clear mask
-      *mask &= ~(0x1 << i) ;
-      instance_cleardisttable(i);
-    }
-    array[i] = INVALID_TOF;
-
-    distance = 0;
-  }
-
-  return newRange;
 }

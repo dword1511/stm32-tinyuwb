@@ -1,21 +1,5 @@
-/*! ----------------------------------------------------------------------------
- *  @file    instance.h
- *  @brief   DecaWave header for application level instance
- *
- * @attention
- *
- * Copyright 2015 (c) DecaWave Ltd, Dublin, Ireland.
- *
- * All rights reserved.
- *
- * @author DecaWave
- */
 #ifndef _INSTANCE_H_
 #define _INSTANCE_H_
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #include <stdint.h>
 
@@ -36,20 +20,11 @@ typedef int64_t int64;
 //DEEP_SLEEP mode can be used, for example, by a Tag instance to put the DW1000 into low-power deep-sleep mode while it is
 //waiting for start of next ranging exchange
 
-#define CORRECT_RANGE_BIAS  (1)     // Compensate for small bias due to uneven accumulator growth at close up high power
-
-#define TAG_HASTO_RANGETO_A0 (0) //if set to 1 then tag will only send the Final if the Response from A0 has been received
-
-#define READ_EVENT_COUNTERS (0) //read event counters - can be used for debug to periodically output event counters
-
-#define DISCOVERY (0)		//set to 1 to enable tag discovery - tags starts by sending blinks (with own ID) and then
-                            //anchor assigns a slot to it and gives it short address
 
 /******************************************************************************************************************
 *******************************************************************************************************************
 *******************************************************************************************************************/
 
-#define NUM_INST            1				  // one instance (tag or anchor - controlling one DW1000)
 #define SPEED_OF_LIGHT      (299702547.0)     // in m/s in air
 #define MASK_40BIT			(0x00FFFFFFFFFF)  // DW1000 counter is 40 bits
 #define MASK_TXDTS			(0x00FFFFFFFE00)  // The TX timestamp will snap to 8 ns resolution - mask lower 9 bits.
@@ -200,43 +175,7 @@ typedef int64_t int64;
 
 
 
-//Anchor to Anchor Ranging
-//1. A0 sends a Poll
-//2. A1 responds (to A0's Poll) after RX_RESPONSE_TURNAROUND (300 us) + response frame length = fixedReplyDelayAnc1 ~= 480 us
-//3. A0 turns its receiver on (after 300 us) expecting A1's response (this is done automatically in 1. by using WAIT4RESP)
-//4. A2 responds (to A0's Poll) after 2*fixedReplyDelayAnc1 ~= 960 us.
-//5. A0 turns its receiver on (last Rx on time + fixedReplyDelayAnc1) expecting A2's response (this is done after reception of A1's response using delayed RX)
-//6. A0 sends a Final this is timed from the Poll TX time = pollTx2FinalTxDelayAnc ~= 1550 us (1250+300)
-//7. A1 and A2 turn on their receivers to expect this Final frame (this is done automatically in 2. AND 4. by using WAIT4RESP)
-
-
-//Tag to Anchor Ranging
-//1. Tag sends a Poll
-//2. A0 responds (delayed response) after fixedReplyDelayAnc1, A0 will re-enable its receiver automatically (by using WAIT4RESP)
-//3. A1, A2, A3 re-enble the receiver to receive A0's response
-//4. A1 responds and will re-enable its receiver automatically (by using WAIT4RESP)
-//5. A2, A3 re-enble the receiver to receive A1's response
-//6. A2 responds and will re-enable its receiver automatically (by using WAIT4RESP)
-//7. A0, A3 re-enable the receiver to receive A2's response
-//9. A3 responds and will re-enable its receiver automatically (by using WAIT4RESP)
-//10. A0, A1, A2, A3 - all receive the Final from the tag
-
-
-//Tag Discovery mode
-//1. Tag sends a Blink
-//2. A0 responds with Ranging Init giving it short address and slot time correction
-//3. Tag sleeps until the next period and then starts ranging exchange
-
-
 typedef enum instanceModes{TAG, ANCHOR, ANCHOR_RNG, NUM_MODES} INST_MODE;
-//Tag = Exchanges DecaRanging messages (Poll-Response-Final) with Anchor and enabling Anchor to calculate the range between the two instances
-//Anchor = see above
-//Anchor_Rng = the anchor (assumes a tag function) and ranges to another anchor - used in Anchor to Anchor TWR for auto positioning function
-
-
-// instance sending a poll (starting TWR) is INITIATOR
-// instance which receives a poll (and will be involved in the TWR) is RESPONDER
-// instance which does not receive a poll (default state) will be a LISTENER - will send no responses
 typedef enum instanceTWRModes{INITIATOR, RESPONDER_A, RESPONDER_B, RESPONDER_T, LISTENER, GREETER, ATWR_MODES} ATWR_MODE;
 
 
@@ -411,7 +350,6 @@ typedef struct
 	uint16			rxAntennaDelay ; //DW1000 RX antenna delay
 	uint32 			txPower ;		 //DW1000 TX power
 	uint8 txPowerChanged ;			//power has been changed - update the register on next TWR exchange
-	uint8 antennaDelayChanged;		//antenna delay has been changed - update the register on next TWR exchange
 
 	uint16 instanceAddress16; //contains tag/anchor 16 bit address
 
@@ -501,19 +439,6 @@ typedef struct
     //this is an array which holds last ToFs of the Anchor to Anchor ranging
     uint32 tofArrayAnc[MAX_ANCHOR_LIST_SIZE]; //it contains 3 ToFs relating to same range number sequence (0, 0-1, 0-2, 1-2)
 
-#if (DISCOVERY ==1)
-    uint8 tagListLen ;
-	uint8 tagList[MAX_TAG_LIST_SIZE][8];
-#endif
-
-    //debug counters
-    //int txMsgCount; //number of transmitted messages
-	//int rxMsgCount; //number of received messages
-    //int rxTimeouts ; //number of received timeout events
-	//int lateTX; //number of "LATE" TX events
-	//int lateRX; //number of "LATE" RX events
-
-
 	//ranging counters
     int longTermRangeCount ; //total number of ranges
 
@@ -534,56 +459,13 @@ typedef struct
 
 	uint8 smartPowerEn;
 
-#if (READ_EVENT_COUNTERS == 1)
-	dwt_deviceentcnts_t ecounters;
-#endif
-
-    //instance_data_t instance_data[NUM_INST] ;
-
     double inst_tdist[MAX_TAG_LIST_SIZE] ;
     double inst_idist[MAX_ANCHOR_LIST_SIZE] ;
     double inst_idistraw[MAX_ANCHOR_LIST_SIZE] ;
 
-    event_data_t dw_event_g; /* was in instance_common.c used by instance_getevent(). */
-
+    event_data_t dw_event_g; /* Was in instance_common.c used by instance_getevent(). */
 } instance_data_t ;
 
-//-------------------------------------------------------------------------------------------------------------
-//
-//	Functions used in logging/displaying range and status data
-//
-//-------------------------------------------------------------------------------------------------------------
-
-// function to calculate and the range from given Time of Flight
-int instance_calculate_rangefromTOF(int idx, uint32 tofx);
-
-void instance_cleardisttable(int idx);
-void instance_set_tagdist(int tidx, int aidx);
-double instance_get_tagdist(int idx);
-
-double instance_get_idist(int idx);
-double instance_get_idistraw(int idx);
-int instance_get_idist_mm(int idx);
-int instance_get_idistraw_mm(int idx);
-uint8 instance_validranges(void);
-
-int instance_get_rnum(void);
-int instance_get_rnuma(int idx);
-int instance_get_rnumanc(int idx);
-int instance_get_lcount(void);
-
-int instance_newrangeancadd(void);
-int instance_newrangetagadd(void);
-int instance_newrangepolltim(void);
-int instance_newrange(void);
-int instance_newrangetim(void);
-
-int instance_calc_ranges(uint32 *array, uint16 size, int reportRange, uint8* mask);
-
-// clear the status/ranging data
-void instance_clearcounts(void) ;
-
-void instance_cleardisttableall();
 //-------------------------------------------------------------------------------------------------------------
 //
 //	Functions used in driving/controlling the ranging application
@@ -594,17 +476,14 @@ void instance_cleardisttableall();
 // initialise the instance (application) structures and DW1000 device
 int instance_init(int role);
 // configure the instance and DW1000 device
-void instance_config(instanceConfig_t *config, sfConfig_t *sfconfig) ;
+void instance_config(const instanceConfig_t *config, const sfConfig_t *sfconfig) ;
 
 // configure the MAC address
 void instance_set_16bit_address(uint16 address) ;
 void instance_config_frameheader_16bit(instance_data_t *inst);
 
-void tag_process_rx_timeout(instance_data_t *inst);
-
 // called (periodically or from and interrupt) to process any outstanding TX/RX events and to drive the ranging application
 int tag_run(void) ;
-int anch_run(void) ;       // returns indication of status report change
 
 // configure TX/RX callback functions that are called from DW1000 ISR
 void rx_ok_cb_tag(const dwt_cb_data_t *cb_data);
@@ -619,16 +498,12 @@ void tx_conf_cb(const dwt_cb_data_t *cb_data);
 
 void instance_set_replydelay(int delayms);
 
-// set/get the instance roles e.g. Tag/Anchor
-// done though instance_init void instance_set_role(int mode) ;                //
-int instance_get_role(void) ;
 // get the DW1000 device ID (e.g. 0xDECA0130 for DW1000)
 uint32 instance_readdeviceid(void) ;                                 // Return Device ID reg, enables validation of physical device presence
 
 //void rnganch_change_back_to_anchor(instance_data_t *inst);
 int instance_send_delayed_frame(instance_data_t *inst, int delayedTx);
 
-uint64 instance_convert_usec_to_devtimeu (double microsecu);
 
 
 void instance_seteventtime(event_data_t *dw_event, uint8* timeStamp);
@@ -647,22 +522,11 @@ void instance_clearevents(void);
 
 void instance_notify_DW1000_inIDLE(int idle);
 
-// configure the antenna delays
-void instance_config_antennadelays(uint16 tx, uint16 rx);
-void instance_set_antennadelays(void);
-uint16 instance_get_txantdly(void);
-uint16 instance_get_rxantdly(void);
-
 // configure the TX power
 void instance_config_txpower(uint32 txpower);
 void instance_set_txpower(void);
 int instance_starttxtest(int framePeriod);
 
-
 instance_data_t* instance_get_local_structure_ptr(unsigned int x);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

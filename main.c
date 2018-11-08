@@ -13,13 +13,52 @@
 
 #define DECA_RSTN_PORT  GPIOA
 #define DECA_RSTN_PIN   GPIO0
-#define DECA_NODE_MODE  0
+#define DECA_NODE_MODE  0 /* Lower power than mode 1 according to datasheet */
 #define DECA_NODE_ADDR  0x00
 
+/* TODO: see whether we can squeeze in STM32L011F4 (16K/2K) */
 
-/* In instance_modes.c, was in dw_main.c */
-extern instanceConfig_t chConfig[4];
-extern sfConfig_t sfConfig[4];
+const instanceConfig_t iconfig = {
+#if DECA_NODE_MODE == 0
+  /* TREK1000 mode 1 */
+  .channelNumber  = 2,
+  .preambleCode   = 4,
+  .pulseRepFreq   = DWT_PRF_16M,
+  .dataRate       = DWT_BR_110K,
+  .preambleLen    = DWT_PLEN_1024,
+  .pacSize        = DWT_PAC32,
+  .nsSFD          = 1,
+  .sfdTO          = 1025 + 64 - 32,
+#else
+  /* TREK1000 mode 2 */
+  .channelNumber  = 2,
+  .preambleCode   = 4,
+  .pulseRepFreq   = DWT_PRF_16M,
+  .dataRate       = DWT_BR_6M8,
+  .preambleLen    = DWT_PLEN_128,
+  .pacSize        = DWT_PAC8,
+  .nsSFD          = 0,
+  .sfdTO          = 129 + 8 - 8,
+#endif
+};
+
+const sfConfig_t sconfig = {
+#if DECA_NODE_MODE == 0
+  /* TREK1000 mode 1 */
+  .slotDuration_ms        = 28,
+  .numSlots               = 10,
+  .sfPeriod_ms            = 10 * 28, /* Localization rate */
+  .tagPeriod_ms           = 10 * 28,
+  .pollTxToFinalTxDly_us  = 20000
+#else
+  /* TREK1000 mode 2 */
+  .slotDuration_ms        = 10,
+  .numSlots               = 10,
+  .sfPeriod_ms            = 10 * 10, /* Localization rate */
+  .tagPeriod_ms           = 10 * 10,
+  .pollTxToFinalTxDly_us  = 2500,
+#endif
+};
 
 
 /* Reset is global, which can be a problem... */
@@ -35,73 +74,12 @@ static void hw_reset(void) {
   decamutexoff(s);
 }
 
-static void check_chip(void) {
-  uint32_t dev_id;
-
-  dev_id = dwt_readdevid();
-  if (DWT_DEVICE_ID != dev_id) {
-    if ((dev_id == 0) || (dev_id == 0xffffffff)) {
-      os_panic();
-    }
-  }
-}
-
-/* Handling each chip */
-
 /* Wake-up is triggered when nSS driven low, but oscillator needs 5ms to stabilize. */
-static void wakeup_one_chip(void) {
+static void wakeup_chip(void) {
   gpio_clear(GPIOA, GPIO4);
   tick_sleep(1);
   gpio_set(GPIOA, GPIO4);
   tick_sleep(7);
-}
-
-static void probe_one_chip(void) {
-  uint32_t dev_id;
-
-  wakeup_one_chip();
-  dev_id = instance_readdeviceid();
-  if (DWT_DEVICE_ID != dev_id) {
-    os_panic();
-  }
-  dwt_softreset(); /* Clear sleep bit if any */
-}
-
-static void init_one_chip(void) {
-  int ret;
-
-  ret = instance_init(TAG);
-  if (ret != 0) {
-    os_panic();
-  }
-
-  instance_set_16bit_address(DECA_NODE_ADDR);
-  instance_config(&chConfig[DECA_NODE_MODE], &sfConfig[DECA_NODE_MODE]);
-}
-
-
-/* Main loop from dw_main.c */
-static void range_one_chip(void) {
-  instance_data_t *inst = instance_get_local_structure_ptr(0);
-  int monitor_local = inst->monitor;
-  int txdiff = tick_get_uptime() - (inst->timeofTx);
-
-  tag_run();
-
-  /* Original comments:
-   * if delayed TX scheduled but did not happen after expected time then it has failed... (has to be < slot period)
-   * if anchor just go into RX and wait for next message from tags/anchors
-   * if tag handle as a timeout
-   * NOTE: in this system tick is 10 ms rather than 1 ms, thus detection of such event would be delayed.
-   */
-  /* TODO: this check does not work at all --- have to debug instance codes manually */
-  if ((monitor_local == 1) && (txdiff > (inst->slotDuration_ms))) {
-    inst->wait4ack = 0;
-    tag_process_rx_timeout(inst);
-    inst->monitor = 0;
-  }
-
-  instance_newrange();
 }
 
 static void multispi_config_spi(uint32_t spi, uint32_t clkdiv) {
@@ -141,6 +119,7 @@ static void wait_pgood(void) {
 
 
 int main(void) {
+  int ret;
   decaIrqStatus_t s;
 
   os_init();
@@ -154,16 +133,28 @@ int main(void) {
 
   deca_ctl_init_entry();
   multispi_setup();
-  probe_one_chip();
+
+  wakeup_chip();
+  if (DWT_DEVICE_ID != instance_readdeviceid()) {
+    os_panic();
+  }
+  dwt_softreset(); /* Clear sleep bit if any */
+
   hw_reset();
-  init_one_chip();
+
+  ret = instance_init(TAG);
+  if (ret != 0) {
+    os_panic();
+  }
+  instance_set_16bit_address(DECA_NODE_ADDR);
+  instance_config(&iconfig, &sconfig);
 
   multispi_speedup();
 
   decamutexoff(s);
 
   while (true) {
-    range_one_chip();
+    tag_run();
   }
 
   return 0;
