@@ -29,8 +29,8 @@ OBJS       := $(SRCS:.c=.o)
 # Debugging
 CFLAGS     += -Wall -g3 -gdwarf-4
 # Optimizations
-CFLAGS     += -O2
-# -fipa-pta -fbranch-target-load-optimize -frename-registers
+CFLAGS     += -O2 -ffast-math -fbranch-target-load-optimize
+# -fipa-pta -frename-registers
 #CFLAGS     += -O0 # Use this for debugging-friendly binary
 # Disabling aggressive loop optimizations since it does not work for loops longer than certain iterations
 CFLAGS     += -fno-aggressive-loop-optimizations
@@ -114,10 +114,6 @@ debug: $(ELF) flash
 	@killall st-util || echo
 	@setsid st-util &
 	@-$(GDB) $< -q -ex 'target extended-remote localhost:4242'
-
-check: $(ELF)
-	@$(NM) decadriver/*.o decartls/*.o | grep -v ' [TtnURr] '
-	@$(NM) $(ELF) | fgrep '__'
 
 # Dependencies
 $(DEPDIR)/%.d:

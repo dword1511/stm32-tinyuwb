@@ -155,6 +155,7 @@ int main(void) {
 
   while (true) {
     tag_run();
+    asm("wfi");
   }
 
   return 0;
