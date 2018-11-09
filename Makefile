@@ -40,14 +40,14 @@ CFLAGS     += -O2 -fbranch-target-load-optimize -fipa-pta -frename-registers -fg
 # Selected flags from -O3
 CFLAGS     += -funswitch-loops -fpredictive-commoning -fgcse-after-reload \
               -ftree-loop-vectorize -ftree-loop-distribution -ftree-loop-distribute-patterns -floop-interchange \
-              -fsplit-paths -ftree-slp-vectorize -fvect-cost-model -ftree-partial-pre -fpeel-loops -fipa-cp-clone
+              -fsplit-paths -ftree-slp-vectorize -fvect-cost-model -ftree-partial-pre -fipa-cp-clone
 # Use these for debugging-friendly binary
 #CFLAGS     += -O0
 #CFLAGS     += -Og
 # Disabling aggressive loop optimizations since it does not work for loops longer than certain iterations
 CFLAGS     += -fno-aggressive-loop-optimizations
-# Aggressive optimizations (unstable or causes huge binaries)
-#CFLAGS     += -finline-functions -funroll-loops -floop-unroll-and-jam -fbranch-target-load-optimize2
+# Aggressive optimizations (unstable or causes huge binaries, e.g. peel-loops gives huge gpio_mode_setup, which is rarely used)
+#CFLAGS     += -finline-functions -fpeel-loops -funroll-loops -floop-unroll-and-jam -fbranch-target-load-optimize2
 # Includes
 CFLAGS     += -Ilibopencm3/include/ -I$(TOPDIR)
 # Config
