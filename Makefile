@@ -94,7 +94,7 @@ $(DMP): $(ELF)
 	$(POSTCOMPILE)
 
 # NOTE: libopencm3's Makefile is unaware of top-level Makefile changes, so force remake
-$(LIBOPENCM3): Makefile
+$(LIBOPENCM3) $(LDSCRIPT): Makefile
 	git submodule update --init
 	make -B -C libopencm3 CFLAGS="$(CFLAGS)" PREFIX=$(patsubst %-,%,$(CROSS)) $(OPENCM3_MK)
 
