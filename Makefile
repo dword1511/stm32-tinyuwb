@@ -118,6 +118,9 @@ size: $(ELF)
 symbols: $(ELF)
 	@$(NM) --demangle --size-sort -S $< | grep -v ' [bB] '
 
+symbols_bss: $(ELF)
+	@$(NM) --demangle --size-sort -S $< | grep ' [bB] '
+
 flash: $(HEX)
 	@killall st-util || echo
 	@st-flash --reset --format ihex write $<
