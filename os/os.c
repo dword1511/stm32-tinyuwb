@@ -14,15 +14,15 @@
 #include <os/os.h>
 
 
+/* NOTE: clock functions does not expect interrupts (NOT thread-safe) */
 /* Maximum speed shortens DW1000 active time, might be beneficial */
 void os_dvfs_hsi16(void) {
-  cm_disable_interrupts();
-  rcc_osc_on(RCC_HSI16);
-
   flash_set_ws(FLASH_ACR_LATENCY_1WS); /* 1WS in range 2, 0WS in range 1 */
   rcc_periph_clock_enable(RCC_PWR);
   pwr_set_vos_scale(PWR_SCALE2);
   rcc_periph_clock_disable(RCC_PWR);
+
+  rcc_osc_on(RCC_HSI16);
 
   rcc_wait_for_osc_ready(RCC_HSI16);
   rcc_set_sysclk_source(RCC_HSI16);
@@ -32,10 +32,10 @@ void os_dvfs_hsi16(void) {
   rcc_apb1_frequency  = 16000000;
   rcc_apb2_frequency  = 16000000;
 
-  cm_enable_interrupts();
   tick_setup();
 }
 
+/*
 static const unsigned msi_range[] = {
   RCC_ICSCR_MSIRANGE_65KHZ, RCC_ICSCR_MSIRANGE_131KHZ, RCC_ICSCR_MSIRANGE_262KHZ, RCC_ICSCR_MSIRANGE_524KHZ, RCC_ICSCR_MSIRANGE_1MHZ, RCC_ICSCR_MSIRANGE_2MHZ, RCC_ICSCR_MSIRANGE_4MHZ,
 };
@@ -45,19 +45,11 @@ static const unsigned msi_freq[] = {
 };
 
 static_assert(ARRAY_SIZE(msi_range) == ARRAY_SIZE(msi_freq), "Check msi_range[] and msi_freq[]!");
+*/
 
-void os_dvfs_msi(unsigned f) {
-  unsigned i;
-
-  for (i = 0; i < ARRAY_SIZE(msi_freq); i ++) {
-    if (msi_freq[i] > f) {
-      break;
-    }
-  }
-
-  cm_disable_interrupts();
+void os_dvfs_msi() {
   rcc_osc_on(RCC_MSI);
-  RCC_ICSCR = (RCC_ICSCR & (~(RCC_ICSCR_MSIRANGE_MASK << RCC_ICSCR_MSIRANGE_SHIFT))) | (msi_range[i] << RCC_ICSCR_MSIRANGE_SHIFT);
+  RCC_ICSCR = (RCC_ICSCR & (~(RCC_ICSCR_MSIRANGE_MASK << RCC_ICSCR_MSIRANGE_SHIFT))) | (RCC_ICSCR_MSIRANGE_131KHZ << RCC_ICSCR_MSIRANGE_SHIFT);
 
   rcc_wait_for_osc_ready(RCC_MSI);
   rcc_set_sysclk_source(RCC_MSI);
@@ -68,11 +60,10 @@ void os_dvfs_msi(unsigned f) {
   rcc_periph_clock_disable(RCC_PWR);
   flash_set_ws(FLASH_ACR_LATENCY_0WS);
 
-  rcc_ahb_frequency   = msi_freq[i];
-  rcc_apb1_frequency  = msi_freq[i];
-  rcc_apb2_frequency  = msi_freq[i];
+  rcc_ahb_frequency   = 131072;
+  rcc_apb1_frequency  = 131072;
+  rcc_apb2_frequency  = 131072;
 
-  cm_enable_interrupts();
   tick_setup();
 }
 
@@ -99,14 +90,28 @@ void os_init(void) {
   rcc_periph_clock_enable(RCC_PWR);
   pwr_voltage_regulator_low_power_in_stop();
   PWR_CR |= PWR_CR_LPSDSR;
-  //PWR_CR |= PWR_CR_LPRUN; /* NOTE: LPRUN is for kHz only, and does not work for our system */
+  //PWR_CR |= PWR_CR_LPRUN; /* NOTE: LPRUN is for kHz only, and does not work for our system for some reason */
   rcc_periph_clock_disable(RCC_PWR);
 
-  rcc_set_hpre(RCC_CFGR_HPRE_NODIV); /* Actually very marginal, cannot afford to be any slower */
-  rcc_set_ppre1(RCC_CFGR_PPRE1_NODIV); /* We are not using anything on it, the bridge should be off */
-  rcc_set_ppre2(RCC_CFGR_PPRE2_NODIV);
+  tick_setup();
+}
 
-  os_dvfs_msi(4000000); /* Best for configuring DW1000 */
+void os_pm_sleep_until(unsigned target_ms) {
+  /* WARNING: not having this will result in system lock-up */
+  /* The whole thing can take a few ms while stalling the clock */
+  if (target_ms <= tick_get_uptime()) {
+    return;
+  }
+
+  tick_pause();
+  os_dvfs_msi();
+  tick_setup();
+
+  tick_sleep_until(target_ms);
+
+  tick_pause();
+  os_dvfs_hsi16(); /* FIXME: this is adhoc and will break under other settings */
+  tick_setup();
 }
 
 void os_halt(void) {

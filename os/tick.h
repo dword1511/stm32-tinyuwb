@@ -8,5 +8,6 @@ extern volatile uint32_t tick_get_uptime(void); /* Get uptime in milliseconds (w
 extern void     tick_sleep(uint32_t ms); /* Sleep for milliseconds, w.r.t uptime. */
 extern void     tick_sleep_until(uint32_t target_ms); /* Sleep till target uptime in milliseconds */
 extern void     tick_delay_us(uint32_t us); /* Busy waiting for some approximate microseconds */
+extern void     tick_pause(void); /* Pause counter and compute remaining uptime fraction before DVFS */
 
 #endif /* __RANGING_TICK_H__ */

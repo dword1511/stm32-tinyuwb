@@ -5,7 +5,7 @@ CROSS      ?= arm-none-eabi-
 # NOTE: TICK_HZ has to be large enough for ranging to be accurate
 CONFIG_TICK_HZ     := 500
 CONFIG_DEEP_SLEEP  := 1
-CONFIG_ENABLE_LEDS := 1
+CONFIG_ENABLE_LEDS := 0
 
 
 ###############################################################################

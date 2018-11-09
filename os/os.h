@@ -21,9 +21,10 @@
 
 extern void os_init(void);
 extern void os_halt(void);
+extern void os_pm_sleep_until(unsigned target_ms);
 extern void os_panic(void);
 
-extern void os_dvfs_msi(unsigned f);
+extern void os_dvfs_msi(void);
 extern void os_dvfs_hsi16(void);
 
 #endif /* __RANGING_OS_H__ */

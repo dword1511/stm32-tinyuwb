@@ -21,20 +21,33 @@ void sys_tick_handler(void) {
 }
 
 void tick_setup(void) {
-  unsigned period = (rcc_ahb_frequency) * (SYSCLK_PERIOD_MS) / 1000 - 1;
-
-  systick_interrupt_disable();
+  unsigned period = rcc_ahb_frequency * SYSCLK_PERIOD_MS / 1000 - 1;
 
   systick_set_clocksource(STK_CSR_CLKSOURCE_AHB);
+  systick_set_reload(period);
   systick_clear();
 
   nvic_set_priority(NVIC_SYSTICK_IRQ, 80);
-  systick_set_reload(period);
   systick_interrupt_enable();
   systick_counter_enable();
 
   cycle_per_us = rcc_ahb_frequency / 1000000;
-  sys_tick_handler(); /* FIXME: workaround for missing ticks due to DVFS */
+}
+
+void tick_pause(void) {
+  unsigned counter;
+  unsigned period = systick_get_reload();
+
+  systick_counter_disable();
+  systick_interrupt_disable();
+
+  counter = systick_get_value();
+  counter = (period - counter) * SYSCLK_PERIOD_MS;
+  uptime_ms += counter / period;
+
+  if ((counter % period) > (period / 2)) {
+    uptime_ms ++;
+  }
 }
 
 /* NOTE: Warps every 49 days... */

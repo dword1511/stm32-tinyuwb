@@ -95,7 +95,6 @@ static void spi_setup(unsigned clk_div) {
   spi_set_full_duplex_mode(SPI1);
   spi_set_unidirectional_mode(SPI1);
   spi_set_dff_8bit(SPI1);
-  //rcc_periph_clock_disable(RCC_SPI1);
 }
 
 static void wait_pgood(void) {
@@ -108,7 +107,7 @@ static void wait_pgood(void) {
 
 
 int main(void) {
-  os_init();
+  os_init(); /* NOTE: system clock is now 4MHz */
 
   rcc_periph_clock_enable(RCC_GPIOA);
   gpio_mode_setup(GPIOA, GPIO_MODE_INPUT, GPIO_PUPD_PULLDOWN, DECA_IRQ_PIN); /* TODO: use external pull-down with higher resistance? may not help much */
@@ -126,8 +125,8 @@ int main(void) {
   rcc_periph_clock_disable(RCC_GPIOA);
 
   wait_pgood();
-  dwt_setdevicedataptr(&dw1000local);
 
+  dwt_setdevicedataptr(&dw1000local);
   spi_setup(SPI_CR1_BAUDRATE_FPCLK_DIV_2);
   wakeup_chip();
   if (DWT_DEVICE_ID != instance_readdeviceid()) {
@@ -140,17 +139,21 @@ int main(void) {
   instance_set_16bit_address(DECA_NODE_ADDR);
   instance_config(&iconfig, &sconfig);
 
+  rcc_periph_clock_disable(RCC_SPI1); /* Shouldn't have communication for a while */
+
   os_dvfs_hsi16();
   while (true) {
     wait_pgood();
 
+    rcc_periph_clock_enable(RCC_SPI1);
+    exti_enable_request(DECA_IRQ_EXTI);
     do {
       tag_run();
     } while (instance.testAppState != TA_SLEEP_DONE);
+    exti_disable_request(DECA_IRQ_EXTI); /* Make sure nothing interrupts sleep :) */
+    rcc_periph_clock_disable(RCC_SPI1);
 
-    /* There is no elegant way of doing this */
-    //tick_sleep_until(instance.instanceWakeTime_ms + instance.tagPeriod_ms - 1);
-    asm("wfi");
+    os_pm_sleep_until(instance.instanceWakeTime_ms + instance.tagPeriod_ms - 1);
   }
 
   return 0;
@@ -158,28 +161,21 @@ int main(void) {
 
 /* Implementations of low-level deca_device_api */
 
-static void spi_io(uint32_t spi, const uint8_t *txbuf, uint8_t *rxbuf, uint32_t len) {
-  /* RX only */
-  if ((txbuf == NULL) && (rxbuf != NULL)) {
-    uint32_t i;
-    for (i = 0; i < len; i ++) {
-      rxbuf[i] = spi_xfer(spi, 0x00); /* Need to feed to get */
-    }
-    return;
-  }
+static void spi_rx(uint32_t spi, uint8_t *rxbuf, uint32_t len) {
+  uint32_t i;
 
-  /* TX only */
-  if ((txbuf != NULL) && (rxbuf == NULL)) {
-    uint32_t i;
-    for (i = 0; i < len; i ++) {
-      spi_xfer(spi, txbuf[i]); /* One in, one out. Read it is critical, even if it is garbage. */
-    }
-    return;
+  for (i = 0; i < len; i ++) {
+    rxbuf[i] = spi_xfer(spi, 0x00); /* Need to feed to get */
   }
+}
 
-  /* Full-duplex (not used by DW1000) */
-  /* Error */
-  os_panic();
+static void spi_tx(uint32_t spi, const uint8_t *txbuf, uint32_t len) {
+  uint32_t i;
+
+  for (i = 0; i < len; i ++) {
+    spi_xfer(spi, txbuf[i]); /* One in, one out. Read it is critical, even if it is garbage. */
+  }
+  return;
 }
 
 /* A bit different from spi_clean_disable() */
@@ -190,23 +186,19 @@ static void spi_disable_after_io(uint32_t spi) {
 }
 
 int writetospi(uint16 headerLength, const uint8 *headerBuffer, uint32 bodylength, const uint8 *bodyBuffer) {
-  //rcc_periph_clock_enable(RCC_SPI1);
   spi_enable(SPI1);
-  spi_io(SPI1, headerBuffer, NULL, headerLength);
-  spi_io(SPI1, bodyBuffer, NULL, bodylength);
+  spi_tx(SPI1, headerBuffer, headerLength);
+  spi_tx(SPI1, bodyBuffer, bodylength);
   spi_disable_after_io(SPI1);
-  //rcc_periph_clock_disable(RCC_SPI1);
 
   return DWT_SUCCESS;
 }
 
 int readfromspi(uint16 headerLength, const uint8 *headerBuffer, uint32 readlength, uint8 *readBuffer) {
-  //rcc_periph_clock_enable(RCC_SPI1);
   spi_enable(SPI1);
-  spi_io(SPI1, headerBuffer, NULL, headerLength);
-  spi_io(SPI1, NULL, readBuffer, readlength);
+  spi_tx(SPI1, headerBuffer, headerLength);
+  spi_rx(SPI1, readBuffer, readlength);
   spi_disable_after_io(SPI1);
-  //rcc_periph_clock_disable(RCC_SPI1);
 
   return DWT_SUCCESS;
 }
