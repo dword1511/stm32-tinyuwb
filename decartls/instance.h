@@ -143,9 +143,6 @@ typedef int64_t int64;
 #define RES_TAG_ADD0            3         // Tag's short address (slot num) LSB
 #define RES_TAG_ADD1            4         // Tag's short address (slot num) MSB
 
-
-#define BLINK_PERIOD    (2000) //ms (Blink at 2Hz initially)
-
 #define DW_RX_ON_DELAY    (16) //us - the DW RX has 16 us RX on delay before it will receive any data
 
 //this it the delay used for configuring the receiver on delay (wait for response delay)
@@ -335,7 +332,7 @@ extern void port_wakeup_dw1000_fast(void);
 
 int instance_init(void);
 void instance_config(const instanceConfig_t *config, const sfConfig_t *sfconfig);
-int tag_run(void);
+void tag_run(void);
 
 // configure the MAC address
 void instance_set_16bit_address(uint16 address) ;

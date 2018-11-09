@@ -22,8 +22,10 @@
 
 #define LTC_PG_PIN      GPIO0
 
-#define DECA_NODE_MODE  0 /* Mode 0 has lower power than mode 1 according to datasheet, but mode 1 consumes much less energy */
+#define DECA_NODE_MODE  1 /* Mode 0 has lower power than mode 1 according to datasheet, but mode 1 consumes much less energy */
 #define DECA_NODE_ADDR  0x00
+
+/* NOTE: although BSS is only around 1KB, the application needs quite some stack for packet handling. Minimum requirement would be a STM32L031 */
 
 
 static const instanceConfig_t iconfig = {
@@ -64,7 +66,7 @@ static const sfConfig_t sconfig = {
   .numSlots               = 10,
   .sfPeriod_ms            = 10 * 10, /* Localization rate */
   .tagPeriod_ms           = 10 * 10,
-  .pollTxToFinalTxDly_us  = 2500,
+  .pollTxToFinalTxDly_us  = 2700, /* Was 2500, slacked a bit (should not exceed 5000). Debug with 'b instance_tag.c:244' */
 #endif
 };
 
@@ -93,6 +95,7 @@ static void spi_setup(unsigned clk_div) {
   spi_set_full_duplex_mode(SPI1);
   spi_set_unidirectional_mode(SPI1);
   spi_set_dff_8bit(SPI1);
+  //rcc_periph_clock_disable(RCC_SPI1);
 }
 
 static void wait_pgood(void) {
@@ -106,7 +109,6 @@ static void wait_pgood(void) {
 
 int main(void) {
   os_init();
-  os_dvfs_hsi16();
 
   rcc_periph_clock_enable(RCC_GPIOA);
   gpio_mode_setup(GPIOA, GPIO_MODE_INPUT, GPIO_PUPD_PULLDOWN, DECA_IRQ_PIN); /* TODO: use external pull-down with higher resistance? may not help much */
@@ -126,7 +128,7 @@ int main(void) {
   wait_pgood();
   dwt_setdevicedataptr(&dw1000local);
 
-  spi_setup(SPI_CR1_BAUDRATE_FPCLK_DIV_8);
+  spi_setup(SPI_CR1_BAUDRATE_FPCLK_DIV_2);
   wakeup_chip();
   if (DWT_DEVICE_ID != instance_readdeviceid()) {
     os_panic();
@@ -138,10 +140,16 @@ int main(void) {
   instance_set_16bit_address(DECA_NODE_ADDR);
   instance_config(&iconfig, &sconfig);
 
-  spi_setup(SPI_CR1_BAUDRATE_FPCLK_DIV_2);
+  os_dvfs_hsi16();
   while (true) {
     wait_pgood();
-    tag_run();
+
+    do {
+      tag_run();
+    } while (instance.testAppState != TA_SLEEP_DONE);
+
+    /* There is no elegant way of doing this */
+    //tick_sleep_until(instance.instanceWakeTime_ms + instance.tagPeriod_ms - 1);
     asm("wfi");
   }
 
@@ -182,31 +190,35 @@ static void spi_disable_after_io(uint32_t spi) {
 }
 
 int writetospi(uint16 headerLength, const uint8 *headerBuffer, uint32 bodylength, const uint8 *bodyBuffer) {
+  //rcc_periph_clock_enable(RCC_SPI1);
   spi_enable(SPI1);
   spi_io(SPI1, headerBuffer, NULL, headerLength);
   spi_io(SPI1, bodyBuffer, NULL, bodylength);
   spi_disable_after_io(SPI1);
+  //rcc_periph_clock_disable(RCC_SPI1);
 
   return DWT_SUCCESS;
 }
 
 int readfromspi(uint16 headerLength, const uint8 *headerBuffer, uint32 readlength, uint8 *readBuffer) {
+  //rcc_periph_clock_enable(RCC_SPI1);
   spi_enable(SPI1);
   spi_io(SPI1, headerBuffer, NULL, headerLength);
   spi_io(SPI1, NULL, readBuffer, readlength);
   spi_disable_after_io(SPI1);
+  //rcc_periph_clock_disable(RCC_SPI1);
 
   return DWT_SUCCESS;
 }
 
 /* Does not seem to be useful */
 decaIrqStatus_t decamutexon(void) {
-  exti_disable_request(DECA_IRQ_EXTI);
+  //exti_disable_request(DECA_IRQ_EXTI);
   return 0;
 }
 
 void decamutexoff(__attribute__((unused)) decaIrqStatus_t s) {
-  exti_enable_request(DECA_IRQ_EXTI);
+  //exti_enable_request(DECA_IRQ_EXTI);
 }
 
 void deca_sleep(unsigned int time_ms) {

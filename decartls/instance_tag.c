@@ -165,7 +165,7 @@ static int tag_do_ta_sleep_done(instance_data_t *inst) {
   inst->testAppState = inst->nextState;
   inst->nextState = 0; //clear
   inst->instanceWakeTime_ms = portGetTickCnt();
-#if (DEEP_SLEEP == 1)
+#if DEEP_SLEEP
   port_wakeup_dw1000_fast();
 #if ENABLE_LEDS
   dwt_setleds(1);
@@ -186,7 +186,7 @@ static int tag_do_ta_txe_wait(instance_data_t *inst) {
   if ((inst->nextState == TA_TXPOLL_WAIT_SEND) && (inst->instToSleep)) {
     inst->rangeNum ++;
     inst->testAppState = TA_SLEEP_DONE;
-#if (DEEP_SLEEP == 1)
+#if DEEP_SLEEP
     dwt_entersleep();
 #endif
     if (inst->rxResponseMask != 0) {
@@ -401,7 +401,7 @@ static int tag_app_run(instance_data_t *inst) {
   return instDone;
 }
 
-int tag_run(void) {
+void tag_run(void) {
   instance_data_t* inst = instance_get_local_structure_ptr(0);
   int done = INST_NOT_DONE_YET;
 
@@ -418,7 +418,7 @@ int tag_run(void) {
   }
 
   if (inst->instanceTimerEn == 1) {
-    if ((portGetTickCnt() - inst->instanceWakeTime_ms) > inst->nextWakeUpTime_ms) {
+    if (portGetTickCnt() > (inst->nextWakeUpTime_ms + inst->instanceWakeTime_ms)) {
       /* We missed an expected event */
       event_data_t dw_event;
 
@@ -428,6 +428,4 @@ int tag_run(void) {
       instance_putevent(dw_event, DWT_SIG_RX_TIMEOUT);
     }
   }
-
-  return 0;
 }

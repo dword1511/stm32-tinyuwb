@@ -3,10 +3,9 @@ SRCS       := $(wildcard *.c) $(wildcard decadriver/*.c) $(wildcard decartls/*.c
 CROSS      ?= arm-none-eabi-
 
 # NOTE: TICK_HZ has to be large enough for ranging to be accurate
-CONFIG     ?=   \
-  TICK_HZ=100   \
-  DEEP_SLEEP=1  \
-  ENABLE_LEDS=1 \
+CONFIG_TICK_HZ     := 500
+CONFIG_DEEP_SLEEP  := 1
+CONFIG_ENABLE_LEDS := 1
 
 
 ###############################################################################
@@ -37,16 +36,22 @@ OBJS       := $(SRCS:.c=.o)
 CFLAGS     += -Wall -Wdouble-promotion -g3 -gdwarf-4
 # Optimizations
 # NOTE: without optimization everything will fail... Computational power is marginal.
-CFLAGS     += -O2 -fbranch-target-load-optimize -fipa-pta -frename-registers -fgcse-sm -fgcse-las -funswitch-loops -fsplit-loops -fstdarg-opt
-#CFLAGS     += -O0 # Use this for debugging-friendly binary
+CFLAGS     += -O2 -fbranch-target-load-optimize -fipa-pta -frename-registers -fgcse-sm -fgcse-las -fsplit-loops -fstdarg-opt
+# Selected flags from -O3
+CFLAGS     += -funswitch-loops -fpredictive-commoning -fgcse-after-reload \
+              -ftree-loop-vectorize -ftree-loop-distribution -ftree-loop-distribute-patterns -floop-interchange \
+              -fsplit-paths -ftree-slp-vectorize -fvect-cost-model -ftree-partial-pre -fpeel-loops -fipa-cp-clone
+# Use these for debugging-friendly binary
+#CFLAGS     += -O0
 #CFLAGS     += -Og
 # Disabling aggressive loop optimizations since it does not work for loops longer than certain iterations
 CFLAGS     += -fno-aggressive-loop-optimizations
-# Aggressive optimizations
-#CFLAGS     += -funroll-loops -fbranch-target-load-optimize2
+# Aggressive optimizations (unstable or causes huge binaries)
+#CFLAGS     += -finline-functions -funroll-loops -floop-unroll-and-jam -fbranch-target-load-optimize2
 # Includes
 CFLAGS     += -Ilibopencm3/include/ -I$(TOPDIR)
 # Config
+CONFIG     := TICK_HZ=$(CONFIG_TICK_HZ) DEEP_SLEEP=$(CONFIG_DEEP_SLEEP) ENABLE_LEDS=$(CONFIG_ENABLE_LEDS)
 CFLAGS     += $(addprefix -D,$(CONFIG))
 
 # Generate dependency information
@@ -56,17 +61,17 @@ PRECOMPILE  = mkdir -p $(dir $(DEPDIR)/$*.Td)
 POSTCOMPILE = mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d && touch $@
 
 # Architecture-dependent
-LDSCRIPT    = libopencm3/lib/stm32/l0/stm32l0xx6.ld
-ARCH_FLAGS  = -DSTM32L0 -mthumb -mcpu=cortex-m0plus -msoft-float -fsingle-precision-constant -ffast-math -flto --specs=nano.specs
-OPENCM3_MK  = lib/stm32/l0
-LIBOPENCM3  = libopencm3/lib/libopencm3_stm32l0.a
+LDSCRIPT   := libopencm3/lib/stm32/l0/stm32l0xx6.ld
+ARCH_FLAGS := -DSTM32L0 -mthumb -mcpu=cortex-m0plus -msoft-float -fsingle-precision-constant -ffast-math -flto --specs=nano.specs
+OPENCM3_MK := lib/stm32/l0
+LIBOPENCM3 := libopencm3/lib/libopencm3_stm32l0.a
 CFLAGS     += $(ARCH_FLAGS)
 CFLAGS     += -fno-common -ffunction-sections -fdata-sections
 # LDPATH is required for libopencm3's ld scripts to work.
-LDPATH      = libopencm3/lib/
+LDPATH     := libopencm3/lib/
 # NOTE: the rule will ensure CFLAGS are added during linking
 LDFLAGS    += -nostdlib -L$(LDPATH) -T$(LDSCRIPT) -Wl,-Map -Wl,$(MAP) -Wl,--gc-sections -Wl,--relax
-LDLIBS     += $(LIBOPENCM3) -lc -lm -lgcc
+LDLIBS     += $(LIBOPENCM3) -lc -lgcc
 
 
 default: $(BIN) $(HEX) $(DMP) size

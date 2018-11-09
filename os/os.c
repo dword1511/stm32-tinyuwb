@@ -1,6 +1,7 @@
 /* Power management and DVFS for STM32L0 */
 
 #include <stdbool.h>
+#include <assert.h>
 
 #include <libopencm3/cm3/cortex.h>
 #include <libopencm3/cm3/scb.h>
@@ -27,23 +28,36 @@ void os_dvfs_hsi16(void) {
   rcc_set_sysclk_source(RCC_HSI16);
   rcc_osc_off(RCC_MSI);
 
-  rcc_set_hpre(RCC_CFGR_HPRE_NODIV);
-  rcc_set_ppre1(RCC_CFGR_PPRE1_NODIV);
-  rcc_set_ppre2(RCC_CFGR_PPRE2_NODIV);
-
-  rcc_ahb_frequency   = 16320000;
-  rcc_apb1_frequency  = 16320000;
-  rcc_apb2_frequency  = 16320000;
+  rcc_ahb_frequency   = 16000000;
+  rcc_apb1_frequency  = 16000000;
+  rcc_apb2_frequency  = 16000000;
 
   cm_enable_interrupts();
   tick_setup();
 }
 
-/* Minimum necessary */
-void os_dvfs_msi4(void) {
+static const unsigned msi_range[] = {
+  RCC_ICSCR_MSIRANGE_65KHZ, RCC_ICSCR_MSIRANGE_131KHZ, RCC_ICSCR_MSIRANGE_262KHZ, RCC_ICSCR_MSIRANGE_524KHZ, RCC_ICSCR_MSIRANGE_1MHZ, RCC_ICSCR_MSIRANGE_2MHZ, RCC_ICSCR_MSIRANGE_4MHZ,
+};
+
+static const unsigned msi_freq[] = {
+  65536, 131072, 262144, 524288, 1048576, 2097152, 4194304,
+};
+
+static_assert(ARRAY_SIZE(msi_range) == ARRAY_SIZE(msi_freq), "Check msi_range[] and msi_freq[]!");
+
+void os_dvfs_msi(unsigned f) {
+  unsigned i;
+
+  for (i = 0; i < ARRAY_SIZE(msi_freq); i ++) {
+    if (msi_freq[i] > f) {
+      break;
+    }
+  }
+
   cm_disable_interrupts();
   rcc_osc_on(RCC_MSI);
-  RCC_ICSCR = (RCC_ICSCR & (~(RCC_ICSCR_MSIRANGE_MASK << RCC_ICSCR_MSIRANGE_SHIFT))) | (RCC_ICSCR_MSIRANGE_4MHZ << RCC_ICSCR_MSIRANGE_SHIFT);
+  RCC_ICSCR = (RCC_ICSCR & (~(RCC_ICSCR_MSIRANGE_MASK << RCC_ICSCR_MSIRANGE_SHIFT))) | (msi_range[i] << RCC_ICSCR_MSIRANGE_SHIFT);
 
   rcc_wait_for_osc_ready(RCC_MSI);
   rcc_set_sysclk_source(RCC_MSI);
@@ -54,44 +68,16 @@ void os_dvfs_msi4(void) {
   rcc_periph_clock_disable(RCC_PWR);
   flash_set_ws(FLASH_ACR_LATENCY_0WS);
 
-  rcc_set_hpre(RCC_CFGR_HPRE_NODIV); /* Actually very marginal, cannot afford to be any slower */
-  rcc_set_ppre1(RCC_CFGR_PPRE1_NODIV); /* We are not using anything on it, the bridge should be off */
-  rcc_set_ppre2(RCC_CFGR_PPRE2_NODIV);
-
-  rcc_ahb_frequency   = 4194304;
-  rcc_apb1_frequency  = 4194304;
-  rcc_apb2_frequency  = 4194304;
+  rcc_ahb_frequency   = msi_freq[i];
+  rcc_apb1_frequency  = msi_freq[i];
+  rcc_apb2_frequency  = msi_freq[i];
 
   cm_enable_interrupts();
   tick_setup();
 }
 
-/* For sleeping (LSI for IWDG/RTC only) */
-void os_dvfs_msi65k(void) {
-  cm_disable_interrupts();
-  rcc_osc_on(RCC_MSI);
-  RCC_ICSCR = (RCC_ICSCR & (~(RCC_ICSCR_MSIRANGE_MASK << RCC_ICSCR_MSIRANGE_SHIFT))) | (RCC_ICSCR_MSIRANGE_65KHZ << RCC_ICSCR_MSIRANGE_SHIFT);
+/* NOTE: LSI is for IWDG/RTC only */
 
-  rcc_wait_for_osc_ready(RCC_MSI);
-  rcc_set_sysclk_source(RCC_MSI);
-  rcc_osc_off(RCC_HSI16);
-
-  rcc_periph_clock_enable(RCC_PWR);
-  pwr_set_vos_scale(PWR_SCALE3);
-  rcc_periph_clock_disable(RCC_PWR);
-  flash_set_ws(FLASH_ACR_LATENCY_0WS);
-
-  rcc_set_hpre(RCC_CFGR_HPRE_NODIV); /* Actually very marginal, cannot afford to be any slower */
-  rcc_set_ppre1(RCC_CFGR_PPRE1_NODIV); /* We are not using anything on it, the bridge should be off */
-  rcc_set_ppre2(RCC_CFGR_PPRE2_NODIV);
-
-  rcc_ahb_frequency   = 65536;
-  rcc_apb1_frequency  = 65536;
-  rcc_apb2_frequency  = 65536;
-
-  cm_enable_interrupts();
-  tick_setup();
-}
 
 void os_init(void) {
   flash_prefetch_disable(); /* Slightly slower but more energy-efficient */
@@ -116,7 +102,11 @@ void os_init(void) {
   //PWR_CR |= PWR_CR_LPRUN; /* NOTE: LPRUN is for kHz only, and does not work for our system */
   rcc_periph_clock_disable(RCC_PWR);
 
-  os_dvfs_msi4(); /* Best for configuring DW1000 */
+  rcc_set_hpre(RCC_CFGR_HPRE_NODIV); /* Actually very marginal, cannot afford to be any slower */
+  rcc_set_ppre1(RCC_CFGR_PPRE1_NODIV); /* We are not using anything on it, the bridge should be off */
+  rcc_set_ppre2(RCC_CFGR_PPRE2_NODIV);
+
+  os_dvfs_msi(4000000); /* Best for configuring DW1000 */
 }
 
 void os_halt(void) {

@@ -10,7 +10,6 @@
 
 
 #define SYSCLK_PERIOD_MS  (1000 / (TICK_HZ))
-#define SYSCLK_PERIOD     ((rcc_ahb_frequency) * (SYSCLK_PERIOD_MS) / 1000 - 1)
 
 
 static volatile uint32_t  uptime_ms = 0;
@@ -22,29 +21,38 @@ void sys_tick_handler(void) {
 }
 
 void tick_setup(void) {
+  unsigned period = (rcc_ahb_frequency) * (SYSCLK_PERIOD_MS) / 1000 - 1;
+
+  systick_interrupt_disable();
+
   systick_set_clocksource(STK_CSR_CLKSOURCE_AHB);
   systick_clear();
 
   nvic_set_priority(NVIC_SYSTICK_IRQ, 80);
-  systick_set_reload(SYSCLK_PERIOD);
+  systick_set_reload(period);
   systick_interrupt_enable();
   systick_counter_enable();
 
   cycle_per_us = rcc_ahb_frequency / 1000000;
+  sys_tick_handler(); /* FIXME: workaround for missing ticks due to DVFS */
 }
 
 /* NOTE: Warps every 49 days... */
-uint32_t tick_get_uptime(void) {
+volatile uint32_t tick_get_uptime(void) {
   return uptime_ms;
+}
+
+void tick_sleep_until(uint32_t target_ms) {
+  while (uptime_ms < target_ms) {
+    asm("wfi");
+  }
 }
 
 void tick_sleep(uint32_t ms) {
   uint32_t t_entry = uptime_ms;
   uint32_t target = t_entry + ms;
 
-  while (uptime_ms < target) {
-    asm("wfi");
-  }
+  tick_sleep_until(target);
 }
 
 __attribute__((optimize("unroll-loops")))

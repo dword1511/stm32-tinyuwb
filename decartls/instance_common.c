@@ -1,5 +1,4 @@
 #include <string.h>
-#include <math.h> /* Big no no unless you are using Cortex-M4F */
 
 #include <os/os.h>
 
@@ -22,13 +21,17 @@ static uint64 instance_convert_usec_to_devtimeu(float microsecu) {
   uint32_t hi, lo;
   microsecu = (microsecu / DWT_TIME_UNITS) / 1e6f;
   hi = microsecu / ((1 << 31) * 2.0f);
-  lo = microsecu;
+  lo = microsecu - (hi * ((1 << 31) * 2.0f));
   return ((uint64_t)hi) << 32 | lo;
 }
 
-static float calc_length_data(float msgdatalen) {
+static unsigned calc_length_data(unsigned msgdatalen) {
   instance_data_t* inst = instance_get_local_structure_ptr(0);
-  int x = ceil(msgdatalen * 8 / 330.0f);
+  int x = msgdatalen * 8 / 330;
+
+  if (msgdatalen * 8 % 330) {
+    x ++;
+  }
 
   msgdatalen = msgdatalen * 8 + x * 48;
 
@@ -51,13 +54,13 @@ static float calc_length_data(float msgdatalen) {
 static void instance_set_replydelay(int delayus) {
   instance_data_t *inst = instance_get_local_structure_ptr(0);
 
-  int margin = 2000;
+  int margin = 1000; /* Was 3000 */
   int respframe = 0;
   int respframe_sy = 0;
   int pollframe_sy = 0;
-  float msgdatalen_resp = 0;
-  float msgdatalen_poll = 0;
-  float preamblelen = 0;
+  unsigned msgdatalen_resp = 0;
+  unsigned msgdatalen_poll = 0;
+  unsigned preamblelen = 0;
   int sfdlen = 0;
 
   msgdatalen_resp = calc_length_data(ANCH_RESPONSE_MSG_LEN + FRAME_CRTL_AND_ADDRESS_S + FRAME_CRC);
@@ -68,28 +71,28 @@ static void instance_set_replydelay(int delayus) {
   /* TODO: make it a look-up table rather than this... */
   switch (inst->configData.txPreambLength) {
     case DWT_PLEN_4096:
-      preamblelen = 4096.0f;
+      preamblelen = 4096;
       break;
     case DWT_PLEN_2048:
-      preamblelen = 2048.0f;
+      preamblelen = 2048;
       break;
     case DWT_PLEN_1536:
-      preamblelen = 1536.0f;
+      preamblelen = 1536;
       break;
     case DWT_PLEN_1024:
-      preamblelen = 1024.0f;
+      preamblelen = 1024;
       break;
     case DWT_PLEN_512:
-      preamblelen = 512.0f;
+      preamblelen = 512;
       break;
     case DWT_PLEN_256:
-      preamblelen = 256.0f;
+      preamblelen = 256;
       break;
     case DWT_PLEN_128:
-      preamblelen = 128.0f;
+      preamblelen = 128;
       break;
     case DWT_PLEN_64:
-      preamblelen = 64.0f;
+      preamblelen = 64;
       break;
   }
 
@@ -99,12 +102,12 @@ static void instance_set_replydelay(int delayus) {
     preamblelen = (sfdlen + preamblelen) * 1.01763f;
   }
 
-  respframe_sy = (DW_RX_ON_DELAY + (int)((preamblelen + ((msgdatalen_resp + margin) / 1000.0)) / 1.0256));
-  pollframe_sy = (DW_RX_ON_DELAY + (int)((preamblelen + ((msgdatalen_poll + margin) / 1000.0)) / 1.0256));
+  respframe_sy = (DW_RX_ON_DELAY + (int)((preamblelen + ((msgdatalen_resp + margin) / 1000)) / 1.0256));
+  pollframe_sy = (DW_RX_ON_DELAY + (int)((preamblelen + ((msgdatalen_poll + margin) / 1000)) / 1.0256));
 
   inst->pollTx2FinalTxDelay = instance_convert_usec_to_devtimeu(delayus);
 
-  respframe = (int)(preamblelen + (msgdatalen_resp / 1000.0));
+  respframe = (int)(preamblelen + (msgdatalen_resp / 1000));
   if (inst->configData.dataRate == DWT_BR_110K) {
     inst->preambleDuration32h = (uint32) (((uint64) instance_convert_usec_to_devtimeu (preamblelen)) >> 8) + DW_RX_ON_DELAY;
   } else {
@@ -189,7 +192,7 @@ void instance_config(const instanceConfig_t *config, const sfConfig_t *sfConfig)
   dwt_otpread(TXCFG_ADDRESS+(config->pulseRepFreq - DWT_PRF_16M) + (chan_idx[inst->configData.chan] * 2), &power, 1);
   if ((power == 0x0) || (power == 0xffffffff)) {
     /* No cal found, load defaults */
-    power = txSpectrumConfig[config->channelNumber].txPwr[config->pulseRepFreq- DWT_PRF_16M];
+    power = txSpectrumConfig[config->channelNumber].txPwr[config->pulseRepFreq - DWT_PRF_16M];
   }
 
   inst->configTX.power = power;
