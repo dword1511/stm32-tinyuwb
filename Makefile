@@ -5,7 +5,7 @@ CROSS      ?= arm-none-eabi-
 # NOTE: TICK_HZ has to be large enough for ranging to be accurate
 CONFIG_TICK_HZ     := 500
 CONFIG_DEEP_SLEEP  := 1
-CONFIG_ENABLE_LEDS := 0
+CONFIG_ENABLE_LEDS := 1
 
 
 ###############################################################################
@@ -94,12 +94,14 @@ $(DMP): $(ELF)
 	$(POSTCOMPILE)
 
 # NOTE: libopencm3's Makefile is unaware of top-level Makefile changes, so force remake
+# NOTE: update ld script modified time to avoid unnecessary remaking
 $(LIBOPENCM3) $(LDSCRIPT): Makefile
 	git submodule update --init
 	make -B -C libopencm3 CFLAGS="$(CFLAGS)" PREFIX=$(patsubst %-,%,$(CROSS)) $(OPENCM3_MK)
+	if [ -e $(LDSCRIPT) ]; then touch $(LDSCRIPT); fi
 
 
-.PHONY: clean distclean size symbols flash erase debug monitor check
+.PHONY: clean distclean size symbols symbols_bss flash erase debug monitor check
 
 clean:
 	rm -f $(OBJS) $(ELF) $(HEX) $(BIN) $(MAP) $(DMP)
@@ -129,10 +131,10 @@ erase:
 	@killall st-util || echo
 	@st-flash erase
 
-debug: $(ELF) flash
+debug: $(ELF)
 	@killall st-util || echo
 	@setsid st-util &
-	@-$(GDB) $< -q -ex 'target extended-remote localhost:4242'
+	@-$(GDB) $< -q -ex 'target extended-remote localhost:4242' -ex 'load'
 
 # Dependencies
 $(DEPDIR)/%.d:

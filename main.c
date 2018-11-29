@@ -117,7 +117,7 @@ int main(void) {
   exti_set_trigger(DECA_IRQ_EXTI, EXTI_TRIGGER_RISING);
   exti_enable_request(DECA_IRQ_EXTI);
 
-  gpio_mode_setup(GPIOA, GPIO_MODE_INPUT, GPIO_PUPD_PULLDOWN, LTC_PG_PIN);
+  gpio_mode_setup(GPIOA, GPIO_MODE_INPUT, GPIO_PUPD_NONE, LTC_PG_PIN); /* NOTE: set to pull-up for debugging */
 
   gpio_set_af(GPIOA, GPIO_AF0, GPIO4 | GPIO5 | GPIO6 | GPIO7);
   gpio_set_output_options(GPIOA, GPIO_OTYPE_PP, GPIO_OSPEED_25MHZ, GPIO4 | GPIO5 | GPIO6 | GPIO7);
