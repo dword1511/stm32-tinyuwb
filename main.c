@@ -15,10 +15,12 @@
 
 
 /* NOTE: we only use GPIOA */
-#define DECA_IRQ_PIN    GPIO1
-#define DECA_IRQ_EXTI   EXTI1
-#define DECA_IRQ        NVIC_EXTI0_1_IRQ
-#define DECA_IRQ_ISR    exti0_1_isr
+#define DECA_IRQ_PIN    GPIO3
+#define DECA_IRQ_EXTI   EXTI3
+#define DECA_IRQ        NVIC_EXTI2_3_IRQ
+#define DECA_IRQ_ISR    exti2_3_isr
+
+#define DECA_RST_PIN    GPIO2
 
 #define LTC_PG_PIN      GPIO0
 
@@ -98,11 +100,16 @@ static void spi_setup(unsigned clk_div) {
 }
 
 static void wait_pgood(void) {
+#if 0
   rcc_periph_clock_enable(RCC_GPIOA);
   while (!gpio_get(GPIOA, LTC_PG_PIN)) {
     asm("wfi");
   }
   rcc_periph_clock_disable(RCC_GPIOA);
+#else
+  /* For debugging start-up process power consumption */
+  while (tick_get_uptime() < 2000);
+#endif
 }
 
 
@@ -110,6 +117,14 @@ int main(void) {
   os_init(); /* NOTE: system clock is now 4MHz */
 
   rcc_periph_clock_enable(RCC_GPIOA);
+
+  /* NOTE: DW1000 still consumes 4mA when RST driven down. Needs to enter deep sleep ASAP by finishing instance_init(). */
+
+  //gpio_set_output_options(GPIOA, GPIO_OTYPE_OD, GPIO_OSPEED_2MHZ, DECA_RST_PIN);
+  //gpio_mode_setup(GPIOA, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, DECA_RST_PIN);
+  //gpio_clear(GPIOA, DECA_RST_PIN);
+  //wait_pgood();
+
   gpio_mode_setup(GPIOA, GPIO_MODE_INPUT, GPIO_PUPD_PULLDOWN, DECA_IRQ_PIN); /* TODO: use external pull-down with higher resistance? may not help much */
   nvic_set_priority(DECA_IRQ, 60);
   nvic_enable_irq(DECA_IRQ);
@@ -117,21 +132,24 @@ int main(void) {
   exti_set_trigger(DECA_IRQ_EXTI, EXTI_TRIGGER_RISING);
   exti_enable_request(DECA_IRQ_EXTI);
 
-  gpio_mode_setup(GPIOA, GPIO_MODE_INPUT, GPIO_PUPD_NONE, LTC_PG_PIN); /* NOTE: set to pull-up for debugging */
-
   gpio_set_af(GPIOA, GPIO_AF0, GPIO4 | GPIO5 | GPIO6 | GPIO7);
   gpio_set_output_options(GPIOA, GPIO_OTYPE_PP, GPIO_OSPEED_25MHZ, GPIO4 | GPIO5 | GPIO6 | GPIO7);
   gpio_mode_setup(GPIOA, GPIO_MODE_AF, GPIO_PUPD_NONE, GPIO4 | GPIO5 | GPIO6 | GPIO7);
-  rcc_periph_clock_disable(RCC_GPIOA);
 
+  gpio_mode_setup(GPIOA, GPIO_MODE_INPUT, GPIO_PUPD_NONE, LTC_PG_PIN);
   wait_pgood();
+
+  //gpio_set(GPIOA, DECA_RST_PIN);
+  rcc_periph_clock_disable(RCC_GPIOA);
 
   dwt_setdevicedataptr(&dw1000local);
   spi_setup(SPI_CR1_BAUDRATE_FPCLK_DIV_2);
+  /*
   wakeup_chip();
   if (DWT_DEVICE_ID != instance_readdeviceid()) {
     os_panic();
   }
+  */
   dwt_softreset(); /* Clear sleep bit if any, as good as hardware reset in most cases */
   if (instance_init() != 0) {
     os_panic();
