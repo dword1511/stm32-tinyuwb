@@ -77,7 +77,7 @@ static instance_data_t  instance;
 
 
 /* Wake-up is triggered when NSS driven low (here by enabling SPI), but oscillator needs 5ms to stabilize. */
-static void wakeup_chip(void) {
+static void __attribute__((unused)) wakeup_chip(void) {
   spi_enable(SPI1);
   tick_sleep(1);
   spi_disable(SPI1);
@@ -100,16 +100,16 @@ static void spi_setup(unsigned clk_div) {
 }
 
 static void wait_pgood(void) {
-#if 0
   rcc_periph_clock_enable(RCC_GPIOA);
+#if 1
   while (!gpio_get(GPIOA, LTC_PG_PIN)) {
     asm("wfi");
   }
-  rcc_periph_clock_disable(RCC_GPIOA);
 #else
   /* For debugging start-up process power consumption */
   while (tick_get_uptime() < 2000);
 #endif
+  rcc_periph_clock_disable(RCC_GPIOA);
 }
 
 
@@ -118,12 +118,7 @@ int main(void) {
 
   rcc_periph_clock_enable(RCC_GPIOA);
 
-  /* NOTE: DW1000 still consumes 4mA when RST driven down. Needs to enter deep sleep ASAP by finishing instance_init(). */
-
-  //gpio_set_output_options(GPIOA, GPIO_OTYPE_OD, GPIO_OSPEED_2MHZ, DECA_RST_PIN);
-  //gpio_mode_setup(GPIOA, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, DECA_RST_PIN);
-  //gpio_clear(GPIOA, DECA_RST_PIN);
-  //wait_pgood();
+  /* NOTE: DW1000 still consumes 4mA even when RST driven down. Needs to enter deep sleep ASAP by finishing instance_init(). */
 
   gpio_mode_setup(GPIOA, GPIO_MODE_INPUT, GPIO_PUPD_PULLDOWN, DECA_IRQ_PIN); /* TODO: use external pull-down with higher resistance? may not help much */
   nvic_set_priority(DECA_IRQ, 60);
@@ -137,10 +132,7 @@ int main(void) {
   gpio_mode_setup(GPIOA, GPIO_MODE_AF, GPIO_PUPD_NONE, GPIO4 | GPIO5 | GPIO6 | GPIO7);
 
   gpio_mode_setup(GPIOA, GPIO_MODE_INPUT, GPIO_PUPD_NONE, LTC_PG_PIN);
-  wait_pgood();
-
-  //gpio_set(GPIOA, DECA_RST_PIN);
-  rcc_periph_clock_disable(RCC_GPIOA);
+  //rcc_periph_clock_disable(RCC_GPIOA); /* wait_pgood() does this for us */
 
   dwt_setdevicedataptr(&dw1000local);
   spi_setup(SPI_CR1_BAUDRATE_FPCLK_DIV_2);
@@ -156,10 +148,15 @@ int main(void) {
   }
   instance_set_16bit_address(DECA_NODE_ADDR);
   instance_config(&iconfig, &sconfig);
+#if DEEP_SLEEP == 1
+  tag_run(); /* Run once to complete tag INIT and enter deep sleep */
+#endif
 
   rcc_periph_clock_disable(RCC_SPI1); /* Shouldn't have communication for a while */
 
+  wait_pgood();
   os_dvfs_hsi16();
+
   while (true) {
     wait_pgood();
 

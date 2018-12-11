@@ -129,7 +129,7 @@ int instance_init(void) {
     return -1;
   }
 
-  /* Enable TXLED and RXLED. NOTE: DW1000 will blink LEDs once during power-on */
+  /* Enable TXLED and RXLED. Do not blink after init to conserve power if deep sleep enabled. */
 #if ENABLE_LEDS && !DEEP_SLEEP
   dwt_setleds(3);
 #endif

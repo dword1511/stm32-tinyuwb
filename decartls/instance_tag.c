@@ -121,8 +121,6 @@ void rx_ok_cb_tag(const dwt_cb_data_t *rxd) {
 }
 
 static int tag_do_ta_init(instance_data_t *inst) {
-  uint16 sleep_mode = 0;
-
   dwt_enableframefilter(DWT_FF_DATA_EN | DWT_FF_ACK_EN); //allow data, ack frames;
 
   inst->eui64[0] += inst->instanceAddress16;
@@ -131,25 +129,27 @@ static int tag_do_ta_init(instance_data_t *inst) {
   memcpy(inst->eui64, &inst->instanceAddress16, ADDR_BYTE_SIZE_S);
   dwt_setaddress16(inst->instanceAddress16);
 
-  inst->nextState = TA_TXPOLL_WAIT_SEND;
-  inst->testAppState = TA_TXE_WAIT;
   inst->instToSleep = TRUE;
   inst->tagSleepTime_ms = inst->tagPeriod_ms;
   inst->rangeNum = 0;
   inst->tagSleepCorrection_ms = 0;
 
-  sleep_mode = (DWT_PRESRV_SLEEP | DWT_CONFIG | DWT_TANDV);
-
-  if (inst->configData.txPreambLength == DWT_PLEN_64) {
-    sleep_mode |= DWT_LOADOPSET;
-  }
-
 #if (DEEP_SLEEP == 1)
-  dwt_configuresleep(sleep_mode, DWT_WAKE_WK | DWT_WAKE_CS | DWT_SLP_EN); //configure the on wake parameters (upload the IC config settings)
+  {
+    uint16 sleep_mode = (DWT_PRESRV_SLEEP | DWT_CONFIG | DWT_TANDV);
+
+    if (inst->configData.txPreambLength == DWT_PLEN_64) {
+      sleep_mode |= DWT_LOADOPSET;
+    }
+
+    dwt_configuresleep(sleep_mode, DWT_WAKE_WK | DWT_WAKE_CS | DWT_SLP_EN); //configure the on wake parameters (upload the IC config settings)
+  }
 #endif
   instance_config_frameheader_16bit(inst);
-  inst->instanceWakeTime_ms = portGetTickCnt();
 
+  inst->nextState = TA_TXPOLL_WAIT_SEND;
+  inst->testAppState = TA_TXE_WAIT;
+  inst->instanceWakeTime_ms = portGetTickCnt();
   return INST_NOT_DONE_YET;
 }
 
