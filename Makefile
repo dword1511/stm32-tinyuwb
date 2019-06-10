@@ -39,8 +39,8 @@ CFLAGS     += -Wall -Wdouble-promotion -g3 -gdwarf-4
 CFLAGS     += -O2 -fbranch-target-load-optimize -fipa-pta -frename-registers -fgcse-sm -fgcse-las -fsplit-loops -fstdarg-opt
 # Selected flags from -O3
 CFLAGS     += -funswitch-loops -fpredictive-commoning -fgcse-after-reload \
-              -ftree-loop-vectorize -ftree-loop-distribution -ftree-loop-distribute-patterns -floop-interchange \
               -fsplit-paths -ftree-slp-vectorize -fvect-cost-model -ftree-partial-pre -fipa-cp-clone
+#              -ftree-loop-vectorize -ftree-loop-distribution -ftree-loop-distribute-patterns -floop-interchange \
 # Use these for debugging-friendly binary
 #CFLAGS     += -O0
 #CFLAGS     += -Og
